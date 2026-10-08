@@ -1,0 +1,50 @@
+name: hrm_app
+description: "A new Flutter project for HRM Cafe."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # State Management
+  flutter_bloc: ^8.1.5
+  equatable: ^2.0.5
+
+  # Networking & API
+  dio: ^5.4.2
+  retrofit: ^4.1.1
+  json_annotation: ^4.8.1
+
+  # Dependency Injection
+  get_it: ^7.6.7
+  injectable: ^2.4.0
+
+  # Local Storage
+  flutter_secure_storage: ^9.0.0
+
+  # GPS & Device Info
+  geolocator: ^11.0.0
+  device_info_plus: ^9.1.2
+
+  # Firebase (Push Notification)
+  firebase_core: ^2.25.4
+  firebase_messaging: ^14.7.15
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  
+  # Code Generation
+  build_runner: ^2.15.1
+  retrofit_generator: ^10.2.9
+  json_serializable: ^6.13.0
+  injectable_generator: ^2.10.0
+
+flutter:
+  uses-material-design: true

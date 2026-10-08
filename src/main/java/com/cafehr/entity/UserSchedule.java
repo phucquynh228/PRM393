@@ -1,0 +1,39 @@
+package com.cafehr.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDate;
+
+/**
+ * Entity đại diện cho lịch làm việc được phân công cho nhân viên.
+ * Mỗi record = 1 user được phân 1 ca (shift) vào 1 ngày cụ thể.
+ */
+@Entity
+@Table(name = "user_schedules")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class UserSchedule {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shift_id", nullable = false)
+    private Shift shift;
+
+    @Column(nullable = false)
+    private LocalDate date;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ScheduleStatus status;
+}

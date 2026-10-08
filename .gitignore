@@ -1,0 +1,27 @@
+# Target & build outputs
+target/
+*.class
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Flutter & Dart (if subfolder build files leak)
+hrm_app/.dart_tool/
+hrm_app/.flutter-plugins
+hrm_app/.flutter-plugins-dependencies
+hrm_app/.pub-cache/
+hrm_app/.pub/
+hrm_app/build/
+hrm_app/android/.gradle/
+hrm_app/android/local.properties
