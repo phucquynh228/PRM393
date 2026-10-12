@@ -45,6 +45,8 @@ Future<bool> _checkIsEmulator() async {
   return false;
 }
 
+String globalBaseUrl = 'http://10.0.2.2:8080/api';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -54,7 +56,7 @@ void main() async {
 
   // Kiểm tra chính xác xem có phải là Giả lập Emulator hay không
   final isEmulator = await _checkIsEmulator();
-  final String baseUrl = isEmulator
+  globalBaseUrl = isEmulator
       ? 'http://10.0.2.2:8080/api'      // Dành cho Android Emulator
       : 'http://10.33.75.228:8080/api';  // Dành cho Máy thật (IP Wi-Fi của máy tính)
 
@@ -75,7 +77,7 @@ void main() async {
     ),
   );
 
-  final apiClient = ApiClient(dio, baseUrl: baseUrl);
+  final apiClient = ApiClient(dio, baseUrl: globalBaseUrl);
 
   final authRepository = AuthRepositoryImpl(
     apiClient: apiClient,

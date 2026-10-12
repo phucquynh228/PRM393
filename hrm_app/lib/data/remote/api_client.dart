@@ -27,4 +27,28 @@ abstract class ApiClient {
 
   @POST('/auth/reset-device/{userId}')
   Future<ApiResponse<dynamic>> resetDevice(@Path("userId") int userId);
+
+  @GET('/admin/dashboard')
+  Future<ApiResponse<dynamic>> getDashboardSummary();
+
+  @GET('/admin/stores')
+  Future<ApiResponse<dynamic>> getAllStores();
+
+  @POST('/admin/stores')
+  Future<ApiResponse<dynamic>> createStore(@Body() Map<String, dynamic> body);
+
+  @GET('/admin/users')
+  Future<ApiResponse<dynamic>> getAllUsers();
+
+  @POST('/admin/users')
+  Future<ApiResponse<dynamic>> createUser(@Body() Map<String, dynamic> body);
+
+  @PUT('/admin/users/{id}')
+  Future<ApiResponse<dynamic>> updateUser(@Path("id") int id, @Body() Map<String, dynamic> body);
+
+  @DELETE('/admin/users/{id}')
+  Future<ApiResponse<dynamic>> deleteUser(@Path("id") int id);
+
+  @GET('/admin/attendance')
+  Future<ApiResponse<dynamic>> getAllAttendance();
 }

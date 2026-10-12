@@ -2,6 +2,7 @@ package com.cafehr.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalTime;
 

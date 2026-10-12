@@ -2,6 +2,7 @@ package com.cafehr.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 /**
  * Entity đại diện cho nhân viên / người dùng trong hệ thống.

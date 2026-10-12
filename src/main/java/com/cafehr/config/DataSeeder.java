@@ -30,7 +30,12 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (userRepository.count() > 0) {
-            log.info("[SEEDER] Dữ liệu đã tồn tại, bỏ qua seeding.");
+            log.info("[SEEDER] Dữ liệu đã tồn tại, cập nhật tên Tiếng Việt chuẩn UTF-8...");
+            userRepository.findByPhone("0901000001").ifPresent(u -> { u.setName("Nguyễn Văn Admin"); userRepository.save(u); });
+            userRepository.findByPhone("0901000002").ifPresent(u -> { u.setName("Trần Thị Manager"); userRepository.save(u); });
+            userRepository.findByPhone("0901000003").ifPresent(u -> { u.setName("Lê Văn Staff 1"); userRepository.save(u); });
+            userRepository.findByPhone("0901000004").ifPresent(u -> { u.setName("Phạm Thị Staff 2"); userRepository.save(u); });
+            userRepository.findByPhone("0901000005").ifPresent(u -> { u.setName("Hoàng Văn Staff 3"); userRepository.save(u); });
             return;
         }
 

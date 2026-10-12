@@ -1,5 +1,10 @@
 server:
   port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
 
 spring:
   application:
@@ -7,7 +12,7 @@ spring:
 
   # ============ Microsoft SQL Server ============
   datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=CafeHRM;encrypt=true;trustServerCertificate=true
+    url: jdbc:sqlserver://localhost:1433;databaseName=CafeHRM;encrypt=true;trustServerCertificate=true;
     username: sa
     password: 123456
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
