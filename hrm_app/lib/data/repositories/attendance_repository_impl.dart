@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../core/services/location_service.dart';
 import '../../domain/repositories/attendance_repository.dart';
 import '../models/check_in_request.dart';
@@ -15,11 +16,21 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
 
   @override
   Future<List<ScheduleModel>> getTodaySchedules() async {
-    final response = await apiClient.getTodaySchedules();
-    if (response.success == true && response.data != null) {
-      return response.data!;
-    } else {
-      throw Exception(response.message ?? 'Không thể tải lịch làm việc');
+    try {
+      final response = await apiClient.getTodaySchedules();
+      if (response.success == true && response.data != null) {
+        return response.data!;
+      } else {
+        throw Exception(response.message ?? 'Không thể tải lịch làm việc');
+      }
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final message = e.response?.data['message'];
+        if (message != null && message.toString().isNotEmpty) {
+          throw Exception(message.toString());
+        }
+      }
+      rethrow;
     }
   }
 
@@ -35,17 +46,37 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       lng: position.longitude,
     );
     
-    final response = await apiClient.checkIn(request);
-    if (response.success != true) {
-      throw Exception(response.message ?? 'Chấm công thất bại');
+    try {
+      final response = await apiClient.checkIn(request);
+      if (response.success != true) {
+        throw Exception(response.message ?? 'Chấm công thất bại');
+      }
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final message = e.response?.data['message'];
+        if (message != null && message.toString().isNotEmpty) {
+          throw Exception(message.toString());
+        }
+      }
+      rethrow;
     }
   }
 
   @override
   Future<void> checkOut(int attendanceId) async {
-    final response = await apiClient.checkOut(attendanceId);
-    if (response.success != true) {
-      throw Exception(response.message ?? 'Check-out thất bại');
+    try {
+      final response = await apiClient.checkOut(attendanceId);
+      if (response.success != true) {
+        throw Exception(response.message ?? 'Check-out thất bại');
+      }
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final message = e.response?.data['message'];
+        if (message != null && message.toString().isNotEmpty) {
+          throw Exception(message.toString());
+        }
+      }
+      rethrow;
     }
   }
 }

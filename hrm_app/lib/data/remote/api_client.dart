@@ -24,4 +24,7 @@ abstract class ApiClient {
 
   @POST('/attendance/check-out/{attendanceId}')
   Future<ApiResponse<dynamic>> checkOut(@Path("attendanceId") int attendanceId);
+
+  @POST('/auth/reset-device/{userId}')
+  Future<ApiResponse<dynamic>> resetDevice(@Path("userId") int userId);
 }

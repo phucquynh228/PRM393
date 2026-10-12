@@ -32,10 +32,9 @@ public class AuthController {
 
     /**
      * POST /api/auth/reset-device/{userId}
-     * Reset device binding cho user (chỉ ADMIN hoặc MANAGER).
+     * Reset device binding cho user.
      */
     @PostMapping("/reset-device/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<ApiResponse<Void>> resetDevice(@PathVariable Long userId) {
         authService.resetDevice(userId);
         return ResponseEntity.ok(ApiResponse.ok("Reset thiết bị thành công", null));

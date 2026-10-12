@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/services/device_info_service.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -40,6 +41,14 @@ class AuthRepositoryImpl implements AuthRepository {
       } else {
         throw Exception(response.message ?? 'Đăng nhập thất bại');
       }
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map) {
+        final message = e.response?.data['message'];
+        if (message != null && message.toString().isNotEmpty) {
+          throw Exception(message.toString());
+        }
+      }
+      rethrow;
     } catch (e) {
       print('>>> [AuthRepo] Exception caught: $e');
       rethrow;

@@ -3,7 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../blocs/login/login_bloc.dart';
 import '../blocs/login/login_event.dart';
 import '../blocs/login/login_state.dart';
-import 'home_screen.dart'; // We will create this in Step 5
+import 'admin_home_screen.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,7 +38,6 @@ class _LoginScreenState extends State<LoginScreen> {
       body: BlocListener<LoginBloc, LoginState>(
         listener: (context, state) {
           if (state is LoginFailure) {
-            // Show AlertDialog if Device ID mismatch or other errors
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -52,9 +52,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else if (state is LoginSuccess) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
-            );
+            final role = state.loginResponse.role.toUpperCase();
+            if (role == 'ADMIN' || role == 'MANAGER') {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => AdminHomeScreen(
+                    loginResponse: state.loginResponse,
+                  ),
+                ),
+              );
+            } else {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            }
           }
         },
         child: SafeArea(
@@ -123,7 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           child: state is LoginLoading
-                              ? const CircularProgressIndicator(color: Colors.white)
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
                               : const Text(
                                   'Đăng Nhập',
                                   style: TextStyle(

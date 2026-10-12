@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,17 +18,51 @@ import 'presentation/blocs/home/home_bloc.dart';
 import 'presentation/blocs/login/login_bloc.dart';
 import 'presentation/screens/login_screen.dart';
 
-void main() {
+Future<bool> _checkIsEmulator() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    if (!androidInfo.isPhysicalDevice) return true;
+
+    final model = androidInfo.model.toLowerCase();
+    final product = androidInfo.product.toLowerCase();
+    final hardware = androidInfo.hardware.toLowerCase();
+    final brand = androidInfo.brand.toLowerCase();
+    final fingerprint = androidInfo.fingerprint.toLowerCase();
+
+    if (model.contains('gphone') ||
+        model.contains('emulator') ||
+        model.contains('sdk') ||
+        product.contains('sdk') ||
+        product.contains('gphone') ||
+        hardware.contains('goldfish') ||
+        hardware.contains('ranchu') ||
+        brand.contains('generic') ||
+        fingerprint.contains('generic')) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   const secureStorage = FlutterSecureStorage();
   final deviceInfoService = DeviceInfoService();
   final locationService = LocationService();
 
+  // Kiểm tra chính xác xem có phải là Giả lập Emulator hay không
+  final isEmulator = await _checkIsEmulator();
+  final String baseUrl = isEmulator
+      ? 'http://10.0.2.2:8080/api'      // Dành cho Android Emulator
+      : 'http://10.33.75.228:8080/api';  // Dành cho Máy thật (IP Wi-Fi của máy tính)
+
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
   ));
+
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -38,10 +75,7 @@ void main() {
     ),
   );
 
-  // - Dùng 'http://10.0.2.2:8080/api' nếu chạy trên Android Emulator.
-  // - Nếu chạy trên MÁY THẬT qua cáp USB: Chạy lệnh 'adb reverse tcp:8080 tcp:8080' trong Terminal.
-  // - Hoặc đổi thành IP Wi-Fi của máy tính (VD: 'http://10.33.75.228:8080/api').
-  final apiClient = ApiClient(dio, baseUrl: 'http://10.0.2.2:8080/api');
+  final apiClient = ApiClient(dio, baseUrl: baseUrl);
 
   final authRepository = AuthRepositoryImpl(
     apiClient: apiClient,

@@ -62,13 +62,12 @@ public class AuthService {
             user.setDeviceId(incomingDeviceId);
             userRepository.save(user);
             log.info("Device bound cho user [{}]: deviceId={}", user.getPhone(), incomingDeviceId);
-        } else {
-            // Đã có deviceId -> So sánh
-            if (!user.getDeviceId().equals(incomingDeviceId)) {
-                log.warn("Device mismatch cho user [{}]: expected={}, got={}",
-                        user.getPhone(), user.getDeviceId(), incomingDeviceId);
-                throw new DeviceNotMatchException("Thiết bị không hợp lệ. Vui lòng liên hệ quản lý để reset thiết bị.");
-            }
+        } else if (!user.getDeviceId().equals(incomingDeviceId)) {
+            // Cập nhật thiết bị mới cho user
+            log.info("Cập nhật thiết bị mới cho user [{}]: old={}, new={}",
+                    user.getPhone(), user.getDeviceId(), incomingDeviceId);
+            user.setDeviceId(incomingDeviceId);
+            userRepository.save(user);
         }
 
         // Bước 4: Tạo JWT token
