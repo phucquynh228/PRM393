@@ -1,7 +1,6 @@
-import 'dart:io';
-
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -18,60 +17,49 @@ import 'presentation/blocs/home/home_bloc.dart';
 import 'presentation/blocs/login/login_bloc.dart';
 import 'presentation/screens/login_screen.dart';
 
-Future<bool> _checkIsEmulator() async {
-  if (!Platform.isAndroid) return false;
-  try {
-    final androidInfo = await DeviceInfoPlugin().androidInfo;
-    if (!androidInfo.isPhysicalDevice) return true;
-
-    final model = androidInfo.model.toLowerCase();
-    final product = androidInfo.product.toLowerCase();
-    final hardware = androidInfo.hardware.toLowerCase();
-    final brand = androidInfo.brand.toLowerCase();
-    final fingerprint = androidInfo.fingerprint.toLowerCase();
-
-    if (model.contains('gphone') ||
-        model.contains('emulator') ||
-        model.contains('sdk') ||
-        product.contains('sdk') ||
-        product.contains('gphone') ||
-        hardware.contains('goldfish') ||
-        hardware.contains('ranchu') ||
-        brand.contains('generic') ||
-        fingerprint.contains('generic')) {
-      return true;
-    }
-  } catch (_) {}
-  return false;
-}
-
 String globalBaseUrl = 'http://10.0.2.2:8080/api';
+
+Future<String> _determineBaseUrl() async {
+  if (kIsWeb) return 'http://localhost:8080/api';
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      final androidInfo = await DeviceInfoPlugin().androidInfo.timeout(
+        const Duration(milliseconds: 500),
+      );
+      if (androidInfo.isPhysicalDevice) {
+        return 'http://10.33.75.228:8080/api'; // IP Wi-Fi máy tính dành cho Máy thật
+      }
+    } catch (_) {}
+  }
+  return 'http://10.0.2.2:8080/api'; // Mặc định cho Android Emulator
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  globalBaseUrl = await _determineBaseUrl();
 
   const secureStorage = FlutterSecureStorage();
   final deviceInfoService = DeviceInfoService();
   final locationService = LocationService();
 
-  // Kiểm tra chính xác xem có phải là Giả lập Emulator hay không
-  final isEmulator = await _checkIsEmulator();
-  globalBaseUrl = isEmulator
-      ? 'http://10.0.2.2:8080/api'      // Dành cho Android Emulator
-      : 'http://10.33.75.228:8080/api';  // Dành cho Máy thật (IP Wi-Fi của máy tính)
-
   final dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 10),
+    connectTimeout: const Duration(seconds: 5),
+    receiveTimeout: const Duration(seconds: 5),
+    sendTimeout: const Duration(seconds: 5),
   ));
 
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await secureStorage.read(key: 'jwt_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
+        try {
+          final token = await secureStorage
+              .read(key: 'jwt_token')
+              .timeout(const Duration(seconds: 2));
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+        } catch (_) {}
         return handler.next(options);
       },
     ),
