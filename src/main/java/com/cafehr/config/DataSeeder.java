@@ -30,12 +30,21 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (userRepository.count() > 0) {
-            log.info("[SEEDER] Dữ liệu đã tồn tại, cập nhật tên Tiếng Việt chuẩn UTF-8...");
+            log.info("[SEEDER] Dữ liệu đã tồn tại, cập nhật mã & tên Tiếng Việt chuẩn UTF-8...");
             userRepository.findByPhone("0901000001").ifPresent(u -> { u.setName("Nguyễn Văn Admin"); userRepository.save(u); });
             userRepository.findByPhone("0901000002").ifPresent(u -> { u.setName("Trần Thị Manager"); userRepository.save(u); });
             userRepository.findByPhone("0901000003").ifPresent(u -> { u.setName("Lê Văn Staff 1"); userRepository.save(u); });
             userRepository.findByPhone("0901000004").ifPresent(u -> { u.setName("Phạm Thị Staff 2"); userRepository.save(u); });
             userRepository.findByPhone("0901000005").ifPresent(u -> { u.setName("Hoàng Văn Staff 3"); userRepository.save(u); });
+
+            storeRepository.findAll().forEach(store -> {
+                if (store.getCode() == null || store.getCode().isBlank()) {
+                    store.setCode("CN-" + String.format("%02d", store.getId()));
+                }
+                if (store.getMaxStaff() == null) store.setMaxStaff(15);
+                if (store.getStatus() == null) store.setStatus(StoreStatus.ACTIVE);
+                storeRepository.save(store);
+            });
             return;
         }
 
@@ -43,24 +52,33 @@ public class DataSeeder implements CommandLineRunner {
 
         // ========================= STORES =========================
         Store store1 = storeRepository.save(Store.builder()
+                .code("HCM-TD01")
                 .name("Cafe Thủ Đức")
                 .latitude(10.8512)     // Tọa độ FPT University HCM
                 .longitude(106.7718)
                 .allowedRadius(200)    // 200 mét
+                .maxStaff(15)
+                .status(StoreStatus.ACTIVE)
                 .build());
 
         Store store2 = storeRepository.save(Store.builder()
+                .code("HCM-Q101")
                 .name("Cafe Quận 1")
                 .latitude(10.7769)
                 .longitude(106.7009)
                 .allowedRadius(150)
+                .maxStaff(10)
+                .status(StoreStatus.ACTIVE)
                 .build());
 
         Store store3 = storeRepository.save(Store.builder()
+                .code("HCM-BT01")
                 .name("Cafe Bình Thạnh")
                 .latitude(10.8013)
                 .longitude(106.7100)
                 .allowedRadius(180)
+                .maxStaff(8)
+                .status(StoreStatus.MAINTENANCE)
                 .build());
 
         log.info("[SEEDER] Đã tạo 3 stores");
@@ -105,6 +123,10 @@ public class DataSeeder implements CommandLineRunner {
                 .role(Role.MANAGER)
                 .store(store1)
                 .build());
+
+        // Gán Cửa hàng trưởng cho Store 1
+        store1.setManager(manager);
+        storeRepository.save(store1);
 
         User staff1 = userRepository.save(User.builder()
                 .name("Lê Văn Staff 1")
@@ -183,7 +205,7 @@ public class DataSeeder implements CommandLineRunner {
         log.info("=====================================================");
         log.info("[SEEDER] SEED HOÀN TẤT! Tài khoản test:");
         log.info("  ADMIN   : 0901000001 / 123456");
-        log.info("  MANAGER : 0901000002 / 123456");
+        log.info("  MANAGER : 0901000002 / 123456 (Cửa hàng trưởng - Cafe Thủ Đức [HCM-TD01])");
         log.info("  STAFF 1 : 0901000003 / 123456 (Cafe Thủ Đức)");
         log.info("  STAFF 2 : 0901000004 / 123456 (Cafe Quận 1)");
         log.info("  STAFF 3 : 0901000005 / 123456 (Cafe Bình Thạnh)");

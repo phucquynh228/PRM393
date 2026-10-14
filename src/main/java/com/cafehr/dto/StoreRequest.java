@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class StoreRequest {
 
+    private String code; // Mã chi nhánh (Ví dụ: HN-CG01)
+
     @NotBlank(message = "Tên chi nhánh không được để trống")
     private String name;
 
@@ -24,4 +26,10 @@ public class StoreRequest {
 
     @NotNull(message = "Bán kính cho phép không được để trống")
     private Integer allowedRadius;
+
+    private Integer maxStaff; // Định biên nhân sự tối đa
+
+    private String status; // ACTIVE, MAINTENANCE, CLOSED
+
+    private Long managerId; // ID Cửa hàng trưởng được bổ nhiệm
 }

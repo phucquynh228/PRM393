@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../../core/services/location_service.dart';
 import '../../data/models/login_response.dart';
 import '../../data/remote/api_client.dart';
 import '../../main.dart';
@@ -19,6 +20,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late ApiClient _apiClient;
+  final LocationService _locationService = LocationService();
 
   bool _isLoading = false;
   Map<String, dynamic>? _dashboardData;
@@ -31,13 +33,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
 
-    // Initialize ApiClient instance
     final dio = Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
     ));
 
-    // Attach JWT token interceptor
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -82,44 +82,280 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     );
   }
 
-  // ================= MODAL THÊM CHI NHÁNH =================
-  void _showAddStoreDialog() {
-    final nameCtrl = TextEditingController();
-    final latCtrl = TextEditingController(text: '10.8512');
-    final lngCtrl = TextEditingController(text: '106.7718');
-    final radiusCtrl = TextEditingController(text: '200');
+  // ================= MODAL THÊM / SỬA CHI NHÁNH & BỔ NHIỆM =================
+  void _showStoreDialog({Map<String, dynamic>? store}) {
+    final isEditing = store != null;
+    final codeCtrl = TextEditingController(text: isEditing ? store['code'] : '');
+    final nameCtrl = TextEditingController(text: isEditing ? store['name'] : '');
+    final latCtrl =
+        TextEditingController(text: isEditing ? '${store['latitude']}' : '10.8512');
+    final lngCtrl = TextEditingController(
+        text: isEditing ? '${store['longitude']}' : '106.7718');
+    final radiusCtrl = TextEditingController(
+        text: isEditing ? '${store['allowedRadius']}' : '200');
+    final maxStaffCtrl = TextEditingController(
+        text: isEditing ? '${store['maxStaff'] ?? 15}' : '15');
+
+    String selectedStatus = isEditing ? (store['status'] ?? 'ACTIVE') : 'ACTIVE';
+    int? selectedManagerId = isEditing ? store['managerId'] : null;
+
+    bool fetchingGps = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Thêm Chi Nhánh Mới'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Tên chi nhánh'),
-              ),
-              TextField(
-                controller: latCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Vĩ độ (Lat)'),
-              ),
-              TextField(
-                controller: lngCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Kinh độ (Lng)'),
-              ),
-              TextField(
-                controller: radiusCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Bán kính cho phép (mét)'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(isEditing ? 'Cấu Hình Chi Nhánh' : 'Tạo Chi Nhánh Mới'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Mã Chi Nhánh
+                TextField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Mã Chi Nhánh (Không trùng)',
+                    hintText: 'VD: HN-CG01, HCM-Q101',
+                    prefixIcon: Icon(Icons.qr_code),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 2. Tên Chi Nhánh
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên chi nhánh',
+                    hintText: 'VD: Cafe Cầu Giấy',
+                    prefixIcon: Icon(Icons.store),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 3. Định Biên Nhân Sự (Max Staff)
+                TextField(
+                  controller: maxStaffCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Định biên nhân sự tối đa (Max Staff)',
+                    hintText: 'VD: 15 (cơ sở lớn), 8 (cơ sở nhỏ)',
+                    prefixIcon: Icon(Icons.groups),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 4. Trạng Thái Vòng Đời Chi Nhánh
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: selectedStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Trạng Thái Hoạt Động',
+                    prefixIcon: Icon(Icons.published_with_changes),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'ACTIVE',
+                        child: Text('ACTIVE (Đang hoạt động)',
+                            overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'MAINTENANCE',
+                        child: Text('MAINTENANCE (Đang bảo trì)',
+                            overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(
+                        value: 'CLOSED',
+                        child: Text('CLOSED (Ngừng hoạt động)',
+                            overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedStatus = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // 5. Bổ Nhiệm Cửa Hàng Trưởng
+                DropdownButtonFormField<int?>(
+                  isExpanded: true,
+                  initialValue: selectedManagerId,
+                  decoration: const InputDecoration(
+                    labelText: 'Bổ Nhiệm Cửa Hàng Trưởng',
+                    prefixIcon: Icon(Icons.person_pin),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Chưa bổ nhiệm (Để trống)',
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    ..._users.map((u) => DropdownMenuItem<int?>(
+                          value: u['id'],
+                          child: Text('${u['name']} (${u['phone']})',
+                              overflow: TextOverflow.ellipsis),
+                        )),
+                  ],
+                  onChanged: (val) {
+                    setDialogState(() => selectedManagerId = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // 6. Tọa Độ GPS & Bán Kính Chấm Công
+                TextField(
+                  controller: latCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Vĩ độ (Latitude GPS)',
+                    prefixIcon: Icon(Icons.my_location),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: lngCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Kinh độ (Longitude GPS)',
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: fetchingGps
+                        ? null
+                        : () async {
+                            setDialogState(() => fetchingGps = true);
+                            try {
+                              final pos =
+                                  await _locationService.getCurrentPosition();
+                              latCtrl.text = pos.latitude.toStringAsFixed(6);
+                              lngCtrl.text = pos.longitude.toStringAsFixed(6);
+                              _showSnackBar('Đã lấy tọa độ GPS thực tế!');
+                            } catch (e) {
+                              _showSnackBar('Không thể lấy GPS: $e',
+                                  isError: true);
+                            } finally {
+                              setDialogState(() => fetchingGps = false);
+                            }
+                          },
+                    icon: fetchingGps
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.gps_fixed),
+                    label: Text(fetchingGps
+                        ? 'Đang quét GPS...'
+                        : 'Lấy Tọa Độ GPS Hiện Tại'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: radiusCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Bán kính chấm công (mét)',
+                    hintText: 'VD: 200',
+                    prefixIcon: Icon(Icons.radar),
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) {
+                  _showSnackBar('Vui lòng nhập tên chi nhánh', isError: true);
+                  return;
+                }
+
+                // Cảnh báo nếu thay đổi Cửa hàng trưởng đang có
+                if (isEditing &&
+                    store['managerId'] != null &&
+                    selectedManagerId != store['managerId'] &&
+                    selectedManagerId != null) {
+                  final confirmChange = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Xác nhận thay Cửa hàng trưởng'),
+                      content: Text(
+                          'Chi nhánh hiện đang có Cửa hàng trưởng: "${store['managerName']}".\nBạn có muốn thay thế người này bằng Cửa hàng trưởng mới không?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: const Text('Hủy'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          style:
+                              ElevatedButton.styleFrom(backgroundColor: Colors.brown),
+                          child: const Text('Xác nhận'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmChange != true) return;
+                }
+
+                if (ctx.mounted) Navigator.pop(ctx);
+                try {
+                  final payload = {
+                    'code': codeCtrl.text.trim().toUpperCase(),
+                    'name': nameCtrl.text.trim(),
+                    'latitude': double.tryParse(latCtrl.text) ?? 10.8512,
+                    'longitude': double.tryParse(lngCtrl.text) ?? 106.7718,
+                    'allowedRadius': int.tryParse(radiusCtrl.text) ?? 200,
+                    'maxStaff': int.tryParse(maxStaffCtrl.text) ?? 15,
+                    'status': selectedStatus,
+                    'managerId': selectedManagerId,
+                  };
+
+                  if (isEditing) {
+                    final res =
+                        await _apiClient.updateStore(store['id'], payload);
+                    if (res.success == true) {
+                      _showSnackBar('Cập nhật chi nhánh thành công');
+                      _loadAllData();
+                    }
+                  } else {
+                    final res = await _apiClient.createStore(payload);
+                    if (res.success == true) {
+                      _showSnackBar('Tạo chi nhánh mới thành công');
+                      _loadAllData();
+                    }
+                  }
+                } catch (e) {
+                  _showSnackBar('Lỗi: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.brown[700],
+                  foregroundColor: Colors.white),
+              child: Text(isEditing ? 'Lưu Cấu Hình' : 'Tạo Chi Nhánh'),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  // ================= XÓA CHI NHÁNH =================
+  void _deleteStore(int storeId, String storeName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa chi nhánh'),
+        content: Text(
+            'Bạn có chắc chắn muốn xóa chi nhánh "$storeName"?\nHệ thống chỉ cho phép xóa khi không còn nhân viên thuộc chi nhánh này.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -127,24 +363,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameCtrl.text.isEmpty) return;
               Navigator.pop(ctx);
               try {
-                final res = await _apiClient.createStore({
-                  'name': nameCtrl.text.trim(),
-                  'latitude': double.tryParse(latCtrl.text) ?? 10.8512,
-                  'longitude': double.tryParse(lngCtrl.text) ?? 106.7718,
-                  'allowedRadius': int.tryParse(radiusCtrl.text) ?? 200,
-                });
+                final res = await _apiClient.deleteStore(storeId);
                 if (res.success == true) {
-                  _showSnackBar('Thêm chi nhánh thành công');
+                  _showSnackBar('Đã xóa chi nhánh thành công');
                   _loadAllData();
                 }
               } catch (e) {
-                _showSnackBar('Lỗi: $e', isError: true);
+                _showSnackBar('Lỗi xóa chi nhánh: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
               }
             },
-            child: const Text('Tạo'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Xóa'),
           ),
         ],
       ),
@@ -185,6 +416,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: selectedRole,
                   decoration: const InputDecoration(labelText: 'Phân quyền Role'),
                   items: const [
@@ -199,13 +431,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 const SizedBox(height: 12),
                 if (_stores.isNotEmpty)
                   DropdownButtonFormField<int>(
+                    isExpanded: true,
                     initialValue: selectedStoreId,
                     decoration:
                         const InputDecoration(labelText: 'Gán vào Chi nhánh'),
                     items: _stores
                         .map((s) => DropdownMenuItem<int>(
                               value: s['id'],
-                              child: Text(s['name'] ?? 'Chi nhánh'),
+                              child: Text('${s['code'] ?? 'CN'} - ${s['name']}',
+                                  overflow: TextOverflow.ellipsis),
                             ))
                         .toList(),
                     onChanged: (val) {
@@ -237,9 +471,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                     _loadAllData();
                   }
                 } catch (e) {
-                  _showSnackBar('Lỗi: $e', isError: true);
+                  _showSnackBar('Lỗi: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
                 }
               },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.brown[700]),
               child: const Text('Tạo'),
             ),
           ],
@@ -410,30 +645,196 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   Widget _buildStoresTab() {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddStoreDialog,
+        onPressed: () => _showStoreDialog(),
         backgroundColor: Colors.brown[800],
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_business),
         label: const Text('Thêm Chi Nhánh'),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _stores.length,
-        itemBuilder: (ctx, idx) {
-          final store = _stores[idx];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: Colors.brown,
-                  child: Icon(Icons.store, color: Colors.white)),
-              title: Text(store['name'] ?? 'Chi nhánh',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                  'Tọa độ: ${store['latitude']}, ${store['longitude']}\nBán kính chấm công: ${store['allowedRadius']}m'),
+      body: _stores.isEmpty
+          ? const Center(child: Text('Chưa có chi nhánh nào trong hệ thống.'))
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _stores.length,
+              itemBuilder: (ctx, idx) {
+                final store = _stores[idx];
+                final storeId = store['id'];
+                final currentCount = store['currentStaffCount'] ?? 0;
+                final maxStaff = store['maxStaff'] ?? 15;
+                final status = store['status'] ?? 'ACTIVE';
+
+                Color statusColor = status == 'ACTIVE'
+                    ? Colors.green
+                    : (status == 'MAINTENANCE' ? Colors.orange : Colors.red);
+                String statusText = status == 'ACTIVE'
+                    ? 'Đang hoạt động'
+                    : (status == 'MAINTENANCE'
+                        ? 'Bảo trì/Sửa chữa'
+                        : 'Ngừng hoạt động');
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.brown[800],
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                store['code'] ?? 'CN-$storeId',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                store['name'] ?? 'Chi nhánh',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                  color: Colors.brown,
+                                ),
+                              ),
+                            ),
+                            Chip(
+                              label: Text(
+                                statusText,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              backgroundColor: statusColor,
+                              padding: EdgeInsets.zero,
+                            ),
+                            PopupMenuButton<String>(
+                              onSelected: (val) {
+                                if (val == 'edit') {
+                                  _showStoreDialog(store: store);
+                                } else if (val == 'delete') {
+                                  _deleteStore(storeId, store['name'] ?? '');
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, color: Colors.blue),
+                                      SizedBox(width: 8),
+                                      Text('Cấu Hình / Chỉnh Sửa'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Text('Xóa Chi Nhánh'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Cửa Hàng Trưởng
+                        Row(
+                          children: [
+                            const Icon(Icons.person_pin,
+                                size: 18, color: Colors.brown),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Cửa hàng trưởng: ',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Expanded(
+                              child: Text(
+                                store['managerName'] ?? 'Chưa bổ nhiệm',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: store['managerName'] != null &&
+                                          store['managerName'] != 'Chưa bổ nhiệm'
+                                      ? Colors.brown[900]
+                                      : Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Định biên nhân sự
+                        Row(
+                          children: [
+                            const Icon(Icons.groups,
+                                size: 18, color: Colors.brown),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Định biên nhân sự: $currentCount / $maxStaff người',
+                              style: TextStyle(
+                                color: currentCount >= maxStaff
+                                    ? Colors.red
+                                    : Colors.black87,
+                                fontWeight: currentCount >= maxStaff
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            if (currentCount >= maxStaff)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 6),
+                                child: Text('(Đã đạt Max)',
+                                    style: TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Tọa độ GPS & Bán kính
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on,
+                                size: 18, color: Colors.brown),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'GPS: ${store['latitude']}, ${store['longitude']} (Bán kính: ${store['allowedRadius']}m)',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.black87),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 

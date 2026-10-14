@@ -37,6 +37,12 @@ abstract class ApiClient {
   @POST('/admin/stores')
   Future<ApiResponse<dynamic>> createStore(@Body() Map<String, dynamic> body);
 
+  @PUT('/admin/stores/{id}')
+  Future<ApiResponse<dynamic>> updateStore(@Path("id") int id, @Body() Map<String, dynamic> body);
+
+  @DELETE('/admin/stores/{id}')
+  Future<ApiResponse<dynamic>> deleteStore(@Path("id") int id);
+
   @GET('/admin/users')
   Future<ApiResponse<dynamic>> getAllUsers();
 
