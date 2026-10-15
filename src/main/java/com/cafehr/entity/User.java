@@ -12,8 +12,6 @@ import org.hibernate.annotations.Nationalized;
 @Table(name = "users")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class User {
 
@@ -47,4 +45,17 @@ public class User {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "store_id")
     private Store store;
+
+    public User() {
+    }
+
+    public User(Long id, String name, String phone, String password, Role role, String deviceId, Store store) {
+        this.id = id;
+        this.name = name;
+        this.phone = phone;
+        this.password = password;
+        this.role = role;
+        this.deviceId = deviceId;
+        this.store = store;
+    }
 }

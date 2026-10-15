@@ -11,8 +11,6 @@ import lombok.*;
 @Table(name = "system_configs")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class SystemConfig {
 
@@ -25,4 +23,13 @@ public class SystemConfig {
 
     @Column(nullable = false, length = 500)
     private String configValue;
+
+    public SystemConfig() {
+    }
+
+    public SystemConfig(Long id, String configKey, String configValue) {
+        this.id = id;
+        this.configKey = configKey;
+        this.configValue = configValue;
+    }
 }

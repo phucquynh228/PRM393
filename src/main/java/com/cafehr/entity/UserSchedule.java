@@ -13,8 +13,6 @@ import java.time.LocalDate;
 @Table(name = "user_schedules")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class UserSchedule {
 
@@ -36,4 +34,15 @@ public class UserSchedule {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ScheduleStatus status;
+
+    public UserSchedule() {
+    }
+
+    public UserSchedule(Long id, User user, Shift shift, LocalDate date, ScheduleStatus status) {
+        this.id = id;
+        this.user = user;
+        this.shift = shift;
+        this.date = date;
+        this.status = status;
+    }
 }

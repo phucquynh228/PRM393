@@ -13,8 +13,6 @@ import java.time.LocalTime;
 @Table(name = "shifts")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class Shift {
 
@@ -30,4 +28,14 @@ public class Shift {
 
     @Column(nullable = false)
     private LocalTime endTime;
+
+    public Shift() {
+    }
+
+    public Shift(Long id, String name, LocalTime startTime, LocalTime endTime) {
+        this.id = id;
+        this.name = name;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
 }

@@ -12,8 +12,6 @@ import org.hibernate.annotations.Nationalized;
 @Table(name = "stores")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class Store {
 
@@ -21,10 +19,9 @@ public class Store {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(length = 50)
     private String code; // Mã chuẩn hóa (Ví dụ: HN-CG01)
 
-    @Nationalized
     @Column(nullable = false, length = 150)
     private String name;
 
@@ -43,7 +40,7 @@ public class Store {
     /**
      * Định biên nhân sự tối đa (Max Staff)
      */
-    @Column(nullable = false)
+    @Column
     @Builder.Default
     private Integer maxStaff = 15;
 
@@ -51,7 +48,7 @@ public class Store {
      * Trạng thái hoạt động chi nhánh: ACTIVE, MAINTENANCE, CLOSED
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(length = 20)
     @Builder.Default
     private StoreStatus status = StoreStatus.ACTIVE;
 
@@ -61,4 +58,19 @@ public class Store {
     @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "manager_id")
     private User manager;
+
+    public Store() {
+    }
+
+    public Store(Long id, String code, String name, Double latitude, Double longitude, Integer allowedRadius, Integer maxStaff, StoreStatus status, User manager) {
+        this.id = id;
+        this.code = code;
+        this.name = name;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.allowedRadius = allowedRadius;
+        this.maxStaff = maxStaff != null ? maxStaff : 15;
+        this.status = status != null ? status : StoreStatus.ACTIVE;
+        this.manager = manager;
+    }
 }

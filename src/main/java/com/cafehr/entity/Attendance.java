@@ -13,8 +13,6 @@ import java.time.LocalDateTime;
 @Table(name = "attendances")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class Attendance {
 
@@ -40,4 +38,17 @@ public class Attendance {
 
     @Column(nullable = false)
     private Double checkInLng;
+
+    public Attendance() {
+    }
+
+    public Attendance(Long id, User user, UserSchedule schedule, LocalDateTime checkInTime, LocalDateTime checkOutTime, Double checkInLat, Double checkInLng) {
+        this.id = id;
+        this.user = user;
+        this.schedule = schedule;
+        this.checkInTime = checkInTime;
+        this.checkOutTime = checkOutTime;
+        this.checkInLat = checkInLat;
+        this.checkInLng = checkInLng;
+    }
 }
