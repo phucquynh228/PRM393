@@ -20,6 +20,9 @@ import java.time.LocalTime;
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
 
+    private static final String INVALID_SEED_PASSWORD_HASH =
+            "$2a$10$7q5J0Q1J3mN8y9X0z1A2b3C4d5E6f7G8h9I0j1K2l3M4n5O6p7Q8R";
+
     private final UserRepository userRepository;
     private final StoreRepository storeRepository;
     private final ShiftRepository shiftRepository;
@@ -36,6 +39,11 @@ public class DataSeeder implements CommandLineRunner {
             userRepository.findByPhone("0901000003").ifPresent(u -> { u.setName("Lê Văn Staff 1"); userRepository.save(u); });
             userRepository.findByPhone("0901000004").ifPresent(u -> { u.setName("Phạm Thị Staff 2"); userRepository.save(u); });
             userRepository.findByPhone("0901000005").ifPresent(u -> { u.setName("Hoàng Văn Staff 3"); userRepository.save(u); });
+            repairSeededPassword("0901000001");
+            repairSeededPassword("0901000002");
+            repairSeededPassword("0901000003");
+            repairSeededPassword("0901000004");
+            repairSeededPassword("0901000005");
 
             storeRepository.findAll().forEach(store -> {
                 if (store.getCode() == null || store.getCode().isBlank()) {
@@ -210,5 +218,14 @@ public class DataSeeder implements CommandLineRunner {
         log.info("  STAFF 2 : 0901000004 / 123456 (Cafe Quận 1)");
         log.info("  STAFF 3 : 0901000005 / 123456 (Cafe Bình Thạnh)");
         log.info("=====================================================");
+    }
+
+    private void repairSeededPassword(String phone) {
+        userRepository.findByPhone(phone).ifPresent(user -> {
+            if (INVALID_SEED_PASSWORD_HASH.equals(user.getPassword())) {
+                user.setPassword(passwordEncoder.encode("123456"));
+                userRepository.save(user);
+            }
+        });
     }
 }

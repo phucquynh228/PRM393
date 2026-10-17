@@ -71,10 +71,13 @@ public class AttendanceService {
             if (!schedule.getUser().getId().equals(userId)) {
                 throw new BusinessException("Lịch làm việc không thuộc về bạn");
             }
+            if (!schedule.isPublished()) {
+                throw new BusinessException("Lịch làm việc chưa được công bố");
+            }
         } else {
             // Tự tìm schedule hôm nay
             schedule = userScheduleRepository
-                    .findFirstByUserIdAndDateOrderByIdAsc(userId, LocalDate.now())
+                    .findFirstByUserIdAndDateAndPublishedTrueOrderByIdAsc(userId, LocalDate.now())
                     .orElseThrow(() -> new BusinessException("Bạn không có ca làm việc hôm nay"));
         }
 

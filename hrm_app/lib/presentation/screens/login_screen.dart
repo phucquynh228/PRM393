@@ -4,6 +4,7 @@ import '../blocs/login/login_bloc.dart';
 import '../blocs/login/login_event.dart';
 import '../blocs/login/login_state.dart';
 import 'admin_home_screen.dart';
+import 'branch_manager_screen.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -53,7 +54,15 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           } else if (state is LoginSuccess) {
             final role = state.loginResponse.role.toUpperCase();
-            if (role == 'ADMIN' || role == 'MANAGER') {
+            if (role == 'MANAGER') {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => BranchManagerScreen(
+                    loginResponse: state.loginResponse,
+                  ),
+                ),
+              );
+            } else if (role == 'ADMIN') {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => AdminHomeScreen(
