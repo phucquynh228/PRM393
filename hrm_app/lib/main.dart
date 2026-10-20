@@ -11,6 +11,8 @@ import 'data/remote/api_client.dart';
 import 'data/repositories/attendance_repository_impl.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'domain/usecases/check_in_usecase.dart';
+import 'domain/usecases/check_out_usecase.dart';
+import 'domain/usecases/get_attendance_history_usecase.dart';
 import 'domain/usecases/get_schedules_usecase.dart';
 import 'domain/usecases/login_usecase.dart';
 import 'presentation/blocs/home/home_bloc.dart';
@@ -81,6 +83,8 @@ void main() async {
   final loginUseCase = LoginUseCase(authRepository);
   final getSchedulesUseCase = GetSchedulesUseCase(attendanceRepository);
   final checkInUseCase = CheckInUseCase(attendanceRepository);
+  final checkOutUseCase = CheckOutUseCase(attendanceRepository);
+  final getAttendanceHistoryUseCase = GetAttendanceHistoryUseCase(attendanceRepository);
 
   runApp(
     MultiBlocProvider(
@@ -92,6 +96,8 @@ void main() async {
           create: (_) => HomeBloc(
             getSchedulesUseCase: getSchedulesUseCase,
             checkInUseCase: checkInUseCase,
+            checkOutUseCase: checkOutUseCase,
+            getAttendanceHistoryUseCase: getAttendanceHistoryUseCase,
           ),
         ),
       ],

@@ -10,13 +10,14 @@ class DashboardTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<HomeBloc, HomeState>(
+      listenWhen: (previous, current) => previous.error != current.error || previous.message != current.message,
       listener: (context, state) {
-        if (state is HomeError) {
+        if (state.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: Colors.red));
-        } else if (state is HomeActionSuccess) {
+              SnackBar(content: Text(state.error!), backgroundColor: Colors.red));
+        } else if (state.message != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.green));
+              SnackBar(content: Text(state.message!), backgroundColor: Colors.green));
         }
       },
       builder: (context, state) {
@@ -30,9 +31,9 @@ class DashboardTab extends StatelessWidget {
               const Text('Ca làm việc hôm nay',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.brown)),
               const SizedBox(height: 16),
-              if (state is HomeLoading)
+              if (state.loading)
                 const Center(child: CircularProgressIndicator())
-              else if (state is HomeLoaded && state.schedules.isEmpty)
+              else if (state.initialized && state.schedules.isEmpty)
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.only(top: 50),
@@ -40,13 +41,16 @@ class DashboardTab extends StatelessWidget {
                         style: TextStyle(fontSize: 16, color: Colors.grey)),
                   ),
                 )
-              else if (state is HomeLoaded)
+              else if (state.initialized)
                 ...state.schedules.map((schedule) {
                   // Phân tích trạng thái để khóa/mở nút theo BR-ATT-02 và BR-ATT-04
                   final status = schedule.status ?? 'PENDING';
                   final isCanceled = status == 'CANCELED';
-                  final canCheckIn = status == 'PENDING';
-                  final canCheckOut = status == 'CHECKED_IN' || status == 'IN_PROGRESS';
+                  final canCheckIn = status == 'PENDING' && !state.busy;
+                  
+                  // Theo HomeBloc mới, checkOut cần lấy ID bản ghi (AttendanceRecord)
+                  final currentAttendance = state.openAttendance(schedule.resolvedId);
+                  final canCheckOut = currentAttendance != null && !state.busy;
 
                   Color statusColor = Colors.orange;
                   String statusText = 'Chưa làm';
@@ -86,6 +90,7 @@ class DashboardTab extends StatelessWidget {
                                 label: Text(statusText,
                                     style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                                 backgroundColor: statusColor,
+                                padding: EdgeInsets.zero,
                               ),
                             ],
                           ),
@@ -115,7 +120,9 @@ class DashboardTab extends StatelessWidget {
                                   onPressed: canCheckIn ? () => context
                                       .read<HomeBloc>()
                                       .add(CheckInRequested(scheduleId: schedule.resolvedId)) : null,
-                                  icon: const Icon(Icons.login),
+                                  icon: state.busy && state.activeScheduleId == schedule.resolvedId && canCheckIn
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Icon(Icons.login),
                                   label: const Text('Check-in'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.green,
@@ -131,8 +138,10 @@ class DashboardTab extends StatelessWidget {
                                 child: ElevatedButton.icon(
                                   onPressed: canCheckOut ? () => context
                                       .read<HomeBloc>()
-                                      .add(const CheckOutRequested(attendanceId: 0)) : null, // Cần cập nhật ID từ API sau
-                                  icon: const Icon(Icons.logout),
+                                      .add(CheckOutRequested(attendanceId: currentAttendance.id)) : null,
+                                  icon: state.busy && state.activeScheduleId == schedule.resolvedId && canCheckOut
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Icon(Icons.logout),
                                   label: const Text('Check-out'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.red,

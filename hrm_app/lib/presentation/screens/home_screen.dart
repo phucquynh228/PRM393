@@ -10,7 +10,9 @@ import 'profile_tab.dart';
 import 'notifications_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String? name;
+  final bool allowRequests;
+  const HomeScreen({super.key, this.name, this.allowRequests = true});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
