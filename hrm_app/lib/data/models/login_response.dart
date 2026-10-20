@@ -17,11 +17,18 @@ class LoginResponse {
     required this.userId,
     required this.name,
     required this.role,
-    this.tokenType,
+    this.tokenType = 'Bearer',
   });
 
-  factory LoginResponse.fromJson(Map<String, dynamic> json) =>
-      _$LoginResponseFromJson(json);
+  factory LoginResponse.fromJson(Map<String, dynamic> json) {
+    final normalized = Map<String, dynamic>.from(json);
+    normalized['userId'] = json['userId'] ?? json['id'] ?? json['user_id'] ?? 0;
+    normalized['token'] = json['token'] ?? json['accessToken'] ?? '';
+    normalized['name'] = json['name'] ?? json['fullName'] ?? '';
+    normalized['role'] = json['role'] ?? 'STAFF';
+    normalized['tokenType'] = json['tokenType'] ?? 'Bearer';
+    return _$LoginResponseFromJson(normalized);
+  }
 
   Map<String, dynamic> toJson() => _$LoginResponseToJson(this);
 }

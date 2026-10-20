@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/services/device_info_service.dart';
+import '../../core/utils/error_handler.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../main.dart';
 import '../models/login_request.dart';
 import '../models/login_response.dart';
 import '../remote/api_client.dart';
@@ -20,9 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<LoginResponse> login(String phone, String password) async {
     try {
-      print('>>> [AuthRepo] Getting device ID...');
       final deviceId = await deviceInfoService.getDeviceId();
-      print('>>> [AuthRepo] Device ID: $deviceId');
       
       final request = LoginRequest(
         phone: phone,
@@ -30,9 +30,7 @@ class AuthRepositoryImpl implements AuthRepository {
         deviceId: deviceId,
       );
 
-      print('>>> [AuthRepo] Calling API login...');
       final response = await apiClient.login(request);
-      print('>>> [AuthRepo] API response received: ${response.success}');
       
       if (response.success == true && response.data != null) {
         final token = response.data!.token;
@@ -42,15 +40,8 @@ class AuthRepositoryImpl implements AuthRepository {
         throw Exception(response.message ?? 'Đăng nhập thất bại');
       }
     } on DioException catch (e) {
-      if (e.response?.data != null && e.response?.data is Map) {
-        final message = e.response?.data['message'];
-        if (message != null && message.toString().isNotEmpty) {
-          throw Exception(message.toString());
-        }
-      }
-      rethrow;
+      throw Exception(ErrorHandler.parseDioError(e, globalBaseUrl));
     } catch (e) {
-      print('>>> [AuthRepo] Exception caught: $e');
       rethrow;
     }
   }

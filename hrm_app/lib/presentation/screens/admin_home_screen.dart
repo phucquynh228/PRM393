@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../core/services/location_service.dart';
+import '../../core/utils/error_handler.dart';
 import '../../data/models/login_response.dart';
 import '../../data/remote/api_client.dart';
 import '../../main.dart';
@@ -67,7 +68,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         if (attRes.success == true) _attendanceList = attRes.data ?? [];
       });
     } catch (e) {
-      _showSnackBar('Lỗi tải dữ liệu: ${e.toString()}', isError: true);
+      final msg = e is DioException
+          ? ErrorHandler.parseDioError(e, globalBaseUrl)
+          : e.toString().replaceAll('Exception: ', '');
+      _showSnackBar('Lỗi tải dữ liệu: $msg', isError: true);
     } finally {
       setState(() => _isLoading = false);
     }

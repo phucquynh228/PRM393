@@ -24,7 +24,7 @@ Future<String> _determineBaseUrl() async {
   if (defaultTargetPlatform == TargetPlatform.android) {
     try {
       final androidInfo = await DeviceInfoPlugin().androidInfo.timeout(
-        const Duration(milliseconds: 500),
+        const Duration(seconds: 2),
       );
       if (androidInfo.isPhysicalDevice) {
         return 'http://10.33.75.228:8080/api'; // IP Wi-Fi máy tính dành cho Máy thật
@@ -44,9 +44,9 @@ void main() async {
   final locationService = LocationService();
 
   final dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
-    sendTimeout: const Duration(seconds: 5),
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+    sendTimeout: const Duration(seconds: 10),
   ));
 
   dio.interceptors.add(

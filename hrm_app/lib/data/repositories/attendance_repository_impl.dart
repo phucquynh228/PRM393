@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import '../../core/services/location_service.dart';
+import '../../core/utils/error_handler.dart';
 import '../../domain/repositories/attendance_repository.dart';
+import '../../main.dart';
 import '../models/check_in_request.dart';
 import '../models/schedule_model.dart';
 import '../remote/api_client.dart';
@@ -24,19 +26,13 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         throw Exception(response.message ?? 'Không thể tải lịch làm việc');
       }
     } on DioException catch (e) {
-      if (e.response?.data != null && e.response?.data is Map) {
-        final message = e.response?.data['message'];
-        if (message != null && message.toString().isNotEmpty) {
-          throw Exception(message.toString());
-        }
-      }
-      rethrow;
+      throw Exception(ErrorHandler.parseDioError(e, globalBaseUrl));
     }
   }
 
   @override
   Future<void> checkIn(int? scheduleId) async {
-    // 1. Get GPS coordinates (Will throw if mocked/fake GPS)
+    // 1. Get GPS coordinates
     final position = await locationService.getCurrentPosition();
 
     // 2. Call API Check-in
@@ -52,13 +48,7 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         throw Exception(response.message ?? 'Chấm công thất bại');
       }
     } on DioException catch (e) {
-      if (e.response?.data != null && e.response?.data is Map) {
-        final message = e.response?.data['message'];
-        if (message != null && message.toString().isNotEmpty) {
-          throw Exception(message.toString());
-        }
-      }
-      rethrow;
+      throw Exception(ErrorHandler.parseDioError(e, globalBaseUrl));
     }
   }
 
@@ -70,13 +60,7 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         throw Exception(response.message ?? 'Check-out thất bại');
       }
     } on DioException catch (e) {
-      if (e.response?.data != null && e.response?.data is Map) {
-        final message = e.response?.data['message'];
-        if (message != null && message.toString().isNotEmpty) {
-          throw Exception(message.toString());
-        }
-      }
-      rethrow;
+      throw Exception(ErrorHandler.parseDioError(e, globalBaseUrl));
     }
   }
 }
