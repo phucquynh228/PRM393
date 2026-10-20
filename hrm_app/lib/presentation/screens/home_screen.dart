@@ -1,483 +1,397 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../data/models/schedule_model.dart';
+import '../../domain/repositories/attendance_repository.dart';
+import '../../domain/usecases/check_in_usecase.dart';
+import '../../domain/usecases/check_out_usecase.dart';
+import '../../domain/usecases/get_schedules_usecase.dart';
+import '../../domain/usecases/get_attendance_history_usecase.dart';
 import '../blocs/home/home_bloc.dart';
 import '../blocs/home/home_event.dart';
 import '../blocs/home/home_state.dart';
-import '../../main.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/content_widgets.dart';
+import '../widgets/empty_state_view.dart';
+import '../widgets/status_badge.dart';
+import 'branch/branch_helpers.dart';
+import 'employee/employee_requests_screen.dart';
+import 'login_screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
+/// Employee state is scoped to this route and disposed on logout.
+class HomeScreen extends StatelessWidget {
+  final String? name;
+  final bool allowRequests;
+  const HomeScreen({super.key, this.name, this.allowRequests = true});
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    final repository = context.read<AttendanceRepository>();
+    return BlocProvider(
+      create: (_) => HomeBloc(
+        getSchedulesUseCase: GetSchedulesUseCase(repository),
+        checkInUseCase: CheckInUseCase(repository),
+        checkOutUseCase: CheckOutUseCase(repository),
+        getAttendanceHistoryUseCase: GetAttendanceHistoryUseCase(repository),
+      ),
+      child: _EmployeeWorkspace(name: name, allowRequests: allowRequests),
+    );
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  late final Dio _requestDio;
+class _EmployeeWorkspace extends StatefulWidget {
+  final String? name;
+  final bool allowRequests;
+  const _EmployeeWorkspace({this.name, required this.allowRequests});
+  @override
+  State<_EmployeeWorkspace> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends State<_EmployeeWorkspace> {
+  int _index = 0;
+  bool _requestsVisited = false;
   @override
   void initState() {
     super.initState();
-    _requestDio = Dio(BaseOptions(baseUrl: globalBaseUrl));
-    _requestDio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          const storage = FlutterSecureStorage();
-          final token = await storage.read(key: 'jwt_token');
-          if (token != null) options.headers['Authorization'] = 'Bearer $token';
-          handler.next(options);
-        },
-      ),
-    );
-    // Load schedules when screen opens
     context.read<HomeBloc>().add(LoadSchedules());
   }
 
-  @override
-  void dispose() {
-    _requestDio.close();
-    super.dispose();
+  Future<void> _refresh() async {
+    final bloc = context.read<HomeBloc>();
+    if (bloc.state.loading || bloc.state.busy) return;
+    final completed = bloc.stream.firstWhere(
+      (state) => !state.loading,
+      orElse: () => bloc.state,
+    );
+    bloc.add(LoadSchedules());
+    await completed;
   }
 
-  Future<void> _showRequests() async {
-    try {
-      final response = await _requestDio.get('/requests/mine');
-      final data = response.data is Map ? response.data['data'] : null;
-      final requests = data is List
-          ? data
-                .whereType<Map>()
-                .map((item) => Map<String, dynamic>.from(item))
-                .toList()
-          : <Map<String, dynamic>>[];
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.72,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 12, 12),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Yêu cầu của tôi',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showRequestForm();
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Tạo đơn'),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: requests.isEmpty
-                      ? const Center(child: Text('Bạn chưa gửi yêu cầu nào'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: requests.length,
-                          itemBuilder: (context, index) {
-                            final request = requests[index];
-                            final approved = request['status'] == 'APPROVED';
-                            final pending = request['status'] == 'PENDING';
-                            final statusColor = pending
-                                ? Colors.orange
-                                : approved
-                                ? Colors.green
-                                : Colors.red;
-                            return Card(
-                              child: ListTile(
-                                leading: Icon(
-                                  request['type'] == 'LEAVE'
-                                      ? Icons.beach_access_outlined
-                                      : Icons.swap_horiz,
-                                  color: Colors.brown,
-                                ),
-                                title: Text(
-                                  request['type'] == 'LEAVE'
-                                      ? 'Xin nghỉ phép'
-                                      : 'Yêu cầu đổi ca',
-                                ),
-                                subtitle: Text(
-                                  '${request['startDate']} — ${request['endDate']}\n${request['reason']}',
-                                ),
-                                isThreeLine: true,
-                                trailing: Text(
-                                  pending
-                                      ? 'Chờ duyệt'
-                                      : approved
-                                      ? 'Đã duyệt'
-                                      : 'Từ chối',
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    } on DioException catch (error) {
-      _showSnackBar(
-        error.response?.data is Map
-            ? error.response?.data['message']?.toString() ??
-                  'Không tải được yêu cầu'
-            : error.message ?? 'Không tải được yêu cầu',
-        isError: true,
-      );
-    }
-  }
-
-  Future<void> _showRequestForm() async {
-    final formKey = GlobalKey<FormState>();
-    final reason = TextEditingController();
-    var requestType = 'LEAVE';
-    var startDate = DateUtils.dateOnly(DateTime.now());
-    var endDate = startDate;
-    await showModalBottomSheet<void>(
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            4,
-            20,
-            MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Tạo yêu cầu',
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: requestType,
-                  decoration: const InputDecoration(
-                    labelText: 'Loại yêu cầu',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'LEAVE',
-                      child: Text('Xin nghỉ phép'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'SHIFT_SWAP',
-                      child: Text('Xin đổi ca'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setSheetState(() {
-                        requestType = value;
-                        if (value == 'SHIFT_SWAP') endDate = startDate;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final value = await showDatePicker(
-                            context: context,
-                            initialDate: startDate,
-                            firstDate: DateUtils.dateOnly(DateTime.now()),
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 365),
-                            ),
-                          );
-                          if (value != null) {
-                            setSheetState(() {
-                              startDate = DateUtils.dateOnly(value);
-                              if (endDate.isBefore(startDate) ||
-                                  requestType == 'SHIFT_SWAP') {
-                                endDate = startDate;
-                              }
-                            });
-                          }
-                        },
-                        icon: const Icon(Icons.event),
-                        label: Text('Từ ${_formatDate(startDate)}'),
-                      ),
-                    ),
-                    if (requestType == 'LEAVE') ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final value = await showDatePicker(
-                              context: context,
-                              initialDate: endDate.isBefore(startDate)
-                                  ? startDate
-                                  : endDate,
-                              firstDate: startDate,
-                              lastDate: DateTime.now().add(
-                                const Duration(days: 365),
-                              ),
-                            );
-                            if (value != null) {
-                              setSheetState(
-                                () => endDate = DateUtils.dateOnly(value),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.event_available),
-                          label: Text('Đến ${_formatDate(endDate)}'),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: reason,
-                  maxLines: 3,
-                  maxLength: 1000,
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Vui lòng nhập lý do'
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Lý do',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.brown[700],
-                    ),
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      try {
-                        await _requestDio.post(
-                          '/requests',
-                          data: {
-                            'type': requestType,
-                            'startDate': _isoDate(startDate),
-                            'endDate': _isoDate(endDate),
-                            'reason': reason.text.trim(),
-                          },
-                        );
-                        if (sheetContext.mounted) Navigator.pop(sheetContext);
-                        _showSnackBar('Đã gửi yêu cầu cho quản lý');
-                      } on DioException catch (error) {
-                        final message = error.response?.data is Map
-                            ? error.response?.data['message']?.toString()
-                            : null;
-                        _showSnackBar(
-                          message ?? error.message ?? 'Không gửi được yêu cầu',
-                          isError: true,
-                        );
-                      }
-                    },
-                    child: const Text('Gửi yêu cầu'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    reason.dispose();
-  }
-
-  String _formatDate(DateTime date) =>
-      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-
-  String _isoDate(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-
-  void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ca làm việc hôm nay'),
-        backgroundColor: Colors.brown[600],
-        foregroundColor: Colors.white,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Đăng xuất?'),
+        content: const Text('Bạn muốn kết thúc phiên làm việc này?'),
         actions: [
-          IconButton(
-            tooltip: 'Đơn nghỉ và đổi ca',
-            icon: const Icon(Icons.mark_email_unread_outlined),
-            onPressed: _showRequests,
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Ở lại'),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              context.read<HomeBloc>().add(LoadSchedules());
-            },
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Đăng xuất'),
           ),
         ],
       ),
-      body: BlocConsumer<HomeBloc, HomeState>(
-        listener: (context, state) {
-          if (state is HomeError) {
-            _showSnackBar(
-              state.error.replaceAll('Exception: ', ''),
-              isError: true,
-            );
-          } else if (state is HomeActionSuccess) {
-            _showSnackBar(state.message);
-          }
-        },
-        builder: (context, state) {
-          if (state is HomeLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+    if (confirmed != true) return;
+    await const FlutterSecureStorage().delete(key: 'jwt_token');
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
 
-          if (state is HomeLoaded) {
-            final schedules = state.schedules;
-            if (schedules.isEmpty) {
-              return const Center(
-                child: Text('Hôm nay bạn không có ca làm việc nào.'),
-              );
-            }
+  void _select(int index) => setState(() {
+    _index = index;
+    if (index == 2) _requestsVisited = true;
+  });
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: schedules.length,
-              itemBuilder: (context, index) {
-                final schedule = schedules[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+  @override
+  Widget build(BuildContext context) => BlocConsumer<HomeBloc, HomeState>(
+    listener: (context, state) {
+      if (state.message != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(state.message!)));
+      }
+    },
+    builder: (context, state) => AppShell(
+      title: 'HRM Cafe',
+      subtitle: 'Không gian nhân viên',
+      selectedIndex: _index,
+      destinations: [
+        const AppDestination('Hôm nay', Icons.wb_sunny_outlined),
+        const AppDestination('Chấm công', Icons.history_rounded),
+        if (widget.allowRequests)
+          const AppDestination('Yêu cầu', Icons.mail_outline_rounded),
+      ],
+      onDestinationSelected: _select,
+      onLogout: _logout,
+      onRefresh: _index == 2 ? null : () => _refresh(),
+      refreshing: state.loading,
+      error: _index == 2 ? null : state.error,
+      child: IndexedStack(
+        index: _index,
+        children: [
+          _today(state),
+          _history(state),
+          _requestsVisited
+              ? const EmployeeRequestsScreen()
+              : const SizedBox.shrink(),
+        ],
+      ),
+    ),
+  );
+
+  Widget _today(HomeState state) {
+    final now = DateTime.now();
+    final completed = state.schedules
+        .where((s) => s.status == 'CHECKED_OUT')
+        .length;
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        children: [
+          PageHeading(
+            title: widget.name == null
+                ? 'Ngày làm việc của bạn'
+                : 'Xin chào, ${widget.name}',
+            subtitle:
+                '${BranchHelpers.prettyDate(now)} · Chúc bạn một ca làm tốt lành',
+          ),
+          SurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'HÔM NAY',
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: AppColors.textSecondary,
                   ),
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          schedule.shiftName ?? 'Ca làm việc',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.brown,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Thời gian: ${schedule.startTime} - ${schedule.endTime}',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Trạng thái: ${schedule.status}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: schedule.status == 'PENDING'
-                                ? Colors.orange
-                                : Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  context.read<HomeBloc>().add(
-                                    CheckInRequested(
-                                      scheduleId: schedule.resolvedId,
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.login),
-                                label: const Text('Check-in'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  // Call check-out, using 0 if attendanceId is not known here
-                                  context.read<HomeBloc>().add(
-                                    const CheckOutRequested(attendanceId: 0),
-                                  );
-                                },
-                                icon: const Icon(Icons.logout),
-                                label: const Text('Check-out'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${state.schedules.length} ca được phân công',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Đã hoàn thành $completed ca. Lịch hiển thị sau khi quản lý công bố.',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    if (widget.allowRequests)
+                      OutlinedButton.icon(
+                        onPressed: () => _select(2),
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Gửi yêu cầu'),
+                      ),
+                    TextButton.icon(
+                      onPressed: () => _select(1),
+                      icon: const Icon(Icons.history),
+                      label: const Text('Lịch sử chấm công'),
                     ),
-                  ),
-                );
-              },
-            );
-          }
-
-          return const Center(child: Text('Vui lòng làm mới trang'));
-        },
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Ca làm hôm nay',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          if (!state.initialized && state.loading)
+            const Padding(
+              padding: EdgeInsets.all(48),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (state.schedules.isEmpty)
+            EmptyStateView(
+              icon: Icons.free_breakfast_outlined,
+              title: state.error == null
+                  ? 'Hôm nay chưa có ca làm'
+                  : 'Chưa tải được lịch làm',
+              message: state.error == null
+                  ? 'Bạn có thể nghỉ ngơi hoặc kiểm tra lại sau khi quản lý công bố lịch.'
+                  : 'Bấm làm mới để thử kết nối lại.',
+            )
+          else
+            ...state.schedules.map(
+              (schedule) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _shiftCard(schedule, state),
+              ),
+            ),
+          const SizedBox(height: 8),
+          const InlineNotice(
+            'Ứng dụng sẽ xin quyền và lấy vị trí khi bạn check-in. Kết quả xác nhận phạm vi được kiểm tra khi gửi chấm công.',
+          ),
+        ],
       ),
     );
   }
+
+  Widget _shiftCard(ScheduleModel schedule, HomeState state) {
+    final checkedIn = schedule.status == 'CHECKED_IN';
+    final pending = schedule.status == 'PENDING';
+    final record = state.openAttendance(schedule.resolvedId);
+    final active = state.busy && state.activeScheduleId == schedule.resolvedId;
+    final enabled = !state.busy && !state.loading && schedule.resolvedId > 0;
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                schedule.shiftName ?? 'Ca làm',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              StatusBadge.fromStatus(schedule.status),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(
+                Icons.schedule_outlined,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${schedule.startTime ?? '—'} – ${schedule.endTime ?? '—'}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (pending || checkedIn)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: !enabled || (checkedIn && record == null)
+                    ? null
+                    : () {
+                        context.read<HomeBloc>().add(
+                          checkedIn
+                              ? CheckOutRequested(attendanceId: record!.id)
+                              : CheckInRequested(
+                                  scheduleId: schedule.resolvedId,
+                                ),
+                        );
+                      },
+                icon: active
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        checkedIn ? Icons.logout_rounded : Icons.login_rounded,
+                        size: 20,
+                      ),
+                label: Text(
+                  active
+                      ? 'Đang xử lý…'
+                      : checkedIn
+                      ? 'Check-out · Kết thúc ca'
+                      : 'Check-in · Bắt đầu ca',
+                ),
+              ),
+            ),
+          if (checkedIn && record == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text(
+                'Chưa tìm thấy bản ghi vào ca. Vui lòng làm mới.',
+                style: TextStyle(color: AppColors.error),
+              ),
+            ),
+          if (!pending && !checkedIn)
+            Text(
+              schedule.status == 'CHECKED_OUT'
+                  ? 'Ca làm đã hoàn thành. Cảm ơn bạn!'
+                  : 'Ca này hiện không thể chấm công.',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _history(HomeState state) => RefreshIndicator(
+    onRefresh: _refresh,
+    child: ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      children: [
+        const PageHeading(
+          title: 'Lịch sử chấm công',
+          subtitle: 'Các lần vào ca và ra ca của bạn',
+        ),
+        if (state.attendance.isEmpty)
+          const EmptyStateView(
+            icon: Icons.history_toggle_off,
+            title: 'Chưa có bản ghi',
+            message: 'Lịch sử sẽ xuất hiện sau lần check-in đầu tiên.',
+          )
+        else
+          ...state.attendance.map(
+            (record) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SurfaceCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        Text(
+                          record.shiftName,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        StatusBadge.fromStatus(record.status),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      record.checkInTime == null
+                          ? '—'
+                          : BranchHelpers.prettyDate(record.checkInTime!),
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 24,
+                      runSpacing: 8,
+                      children: [
+                        Text(
+                          'Vào ca: ${BranchHelpers.clockTime(record.checkInTime)}',
+                        ),
+                        Text(
+                          'Ra ca: ${record.checkOutTime == null ? 'Chưa ra ca' : BranchHelpers.clockTime(record.checkOutTime)}',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }

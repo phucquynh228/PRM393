@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.6
 
   # State Management
@@ -18,7 +20,7 @@ dependencies:
   # Networking & API
   dio: ^5.4.2
   retrofit: ^4.1.1
-  json_annotation: ^4.8.1
+  json_annotation: ^4.11.0
 
   # Dependency Injection
   get_it: ^7.6.7
@@ -48,3 +50,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: HRMSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf

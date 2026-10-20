@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import '../../core/services/device_info_service.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../models/login_request.dart';
@@ -20,26 +22,26 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<LoginResponse> login(String phone, String password) async {
     try {
-      print('>>> [AuthRepo] Getting device ID...');
+      debugPrint('>>> [AuthRepo] Getting device ID...');
       final deviceId = await deviceInfoService.getDeviceId();
-      print('>>> [AuthRepo] Device ID: $deviceId');
-      
+      debugPrint('>>> [AuthRepo] Device ID: $deviceId');
+
       final request = LoginRequest(
         phone: phone,
         password: password,
         deviceId: deviceId,
       );
 
-      print('>>> [AuthRepo] Calling API login...');
+      debugPrint('>>> [AuthRepo] Calling API login...');
       final response = await apiClient.login(request);
-      print('>>> [AuthRepo] API response received: ${response.success}');
-      
+      debugPrint('>>> [AuthRepo] API response received: ${response.success}');
+
       if (response.success == true && response.data != null) {
         final token = response.data!.token;
         await secureStorage.write(key: 'jwt_token', value: token);
         return response.data!;
       } else {
-        throw Exception(response.message ?? 'Đăng nhập thất bại');
+        throw Exception(response.message ?? 'Login failed');
       }
     } on DioException catch (e) {
       if (e.response?.data != null && e.response?.data is Map) {
@@ -50,7 +52,7 @@ class AuthRepositoryImpl implements AuthRepository {
       }
       rethrow;
     } catch (e) {
-      print('>>> [AuthRepo] Exception caught: $e');
+      debugPrint('>>> [AuthRepo] Exception caught: $e');
       rethrow;
     }
   }

@@ -10,28 +10,38 @@ import 'core/services/location_service.dart';
 import 'data/remote/api_client.dart';
 import 'data/repositories/attendance_repository_impl.dart';
 import 'data/repositories/auth_repository_impl.dart';
-import 'domain/usecases/check_in_usecase.dart';
-import 'domain/usecases/get_schedules_usecase.dart';
 import 'domain/usecases/login_usecase.dart';
-import 'presentation/blocs/home/home_bloc.dart';
+import 'domain/repositories/attendance_repository.dart';
 import 'presentation/blocs/login/login_bloc.dart';
+
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'core/theme/app_theme.dart';
 import 'presentation/screens/login_screen.dart';
 
 String globalBaseUrl = 'http://10.0.2.2:8080/api';
 
 Future<String> _determineBaseUrl() async {
-  if (kIsWeb) return 'http://localhost:8080/api';
+  const configured = String.fromEnvironment('API_BASE_URL');
+  if (configured.isNotEmpty) return configured;
+  if (kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.iOS) {
+    return 'http://localhost:8080/api';
+  }
   if (defaultTargetPlatform == TargetPlatform.android) {
     try {
       final androidInfo = await DeviceInfoPlugin().androidInfo.timeout(
         const Duration(milliseconds: 500),
       );
       if (androidInfo.isPhysicalDevice) {
-        return 'http://10.33.75.228:8080/api'; // IP Wi-Fi máy tính dành cho Máy thật
+        return 'http://10.33.75.228:8080/api'; // Host PC Wi-Fi IP for physical device
       }
     } catch (_) {}
   }
-  return 'http://10.0.2.2:8080/api'; // Mặc định cho Android Emulator
+  return 'http://10.0.2.2:8080/api'; // Default for Android Emulator
 }
 
 void main() async {
@@ -43,11 +53,13 @@ void main() async {
   final deviceInfoService = DeviceInfoService();
   final locationService = LocationService();
 
-  final dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 5),
-    receiveTimeout: const Duration(seconds: 5),
-    sendTimeout: const Duration(seconds: 5),
-  ));
+  final dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+      sendTimeout: const Duration(seconds: 5),
+    ),
+  );
 
   dio.interceptors.add(
     InterceptorsWrapper(
@@ -79,23 +91,18 @@ void main() async {
   );
 
   final loginUseCase = LoginUseCase(authRepository);
-  final getSchedulesUseCase = GetSchedulesUseCase(attendanceRepository);
-  final checkInUseCase = CheckInUseCase(attendanceRepository);
-
   runApp(
-    MultiBlocProvider(
+    MultiRepositoryProvider(
       providers: [
-        BlocProvider<LoginBloc>(
-          create: (_) => LoginBloc(loginUseCase: loginUseCase),
-        ),
-        BlocProvider<HomeBloc>(
-          create: (_) => HomeBloc(
-            getSchedulesUseCase: getSchedulesUseCase,
-            checkInUseCase: checkInUseCase,
-          ),
+        RepositoryProvider<Dio>.value(value: dio),
+        RepositoryProvider<AttendanceRepository>.value(
+          value: attendanceRepository,
         ),
       ],
-      child: const MyApp(),
+      child: BlocProvider<LoginBloc>(
+        create: (_) => LoginBloc(loginUseCase: loginUseCase),
+        child: const MyApp(),
+      ),
     ),
   );
 }
@@ -106,12 +113,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'HRM Cafe',
+      title: 'HRM Cafe - Management Portal',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.brown),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
+      locale: const Locale('vi', 'VN'),
+      supportedLocales: const [Locale('vi', 'VN')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const LoginScreen(),
     );
   }
