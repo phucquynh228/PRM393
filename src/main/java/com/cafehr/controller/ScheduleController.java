@@ -36,7 +36,8 @@ public class ScheduleController {
             throw new RuntimeException("Không thể xác định user từ token");
         }
 
-        List<UserSchedule> schedules = userScheduleRepository.findByUserIdAndDate(userId, LocalDate.now());
+        List<UserSchedule> schedules = userScheduleRepository
+                .findByUserIdAndDateAndPublishedTrue(userId, LocalDate.now());
 
         List<ScheduleResponse> response = schedules.stream().map(s -> ScheduleResponse.builder()
                 .id(s.getId())

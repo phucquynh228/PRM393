@@ -1,0 +1,437 @@
+package com.cafehr.controller;
+
+import com.cafehr.dto.ApiResponse;
+import com.cafehr.dto.BranchRequestDecision;
+import com.cafehr.dto.ManagerScheduleRequest;
+import com.cafehr.dto.ManagerStaffRequest;
+import com.cafehr.entity.*;
+import com.cafehr.exception.BusinessException;
+import com.cafehr.repository.*;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/manager")
+@RequiredArgsConstructor
+@PreAuthorize("hasRole('MANAGER')")
+public class BranchManagerController {
+
+    private final UserRepository userRepository;
+    private final StoreRepository storeRepository;
+    private final ShiftRepository shiftRepository;
+    private final UserScheduleRepository scheduleRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final BranchRequestRepository branchRequestRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @GetMapping("/branch")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getBranch(HttpServletRequest request) {
+        Store store = getManagerStore(request);
+        List<Map<String, Object>> staff = userRepository.findByStoreId(store.getId()).stream()
+                .filter(user -> user.getRole() == Role.STAFF)
+                .sorted(Comparator.comparing(User::getName, String.CASE_INSENSITIVE_ORDER))
+                .map(this::staffResponse)
+                .toList();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", store.getId());
+        response.put("code", store.getCode());
+        response.put("name", store.getName());
+        response.put("status", store.getStatus() != null ? store.getStatus().name() : "ACTIVE");
+        response.put("staffCount", staff.size());
+        response.put("maxStaff", store.getMaxStaff());
+        response.put("managerName", store.getManager() != null ? store.getManager().getName() : null);
+        response.put("staff", staff);
+        return ResponseEntity.ok(ApiResponse.ok("Thông tin chi nhánh", response));
+    }
+
+    @GetMapping("/shifts")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShifts() {
+        List<Map<String, Object>> shifts = shiftRepository.findAll().stream()
+                .sorted(Comparator.comparing(Shift::getStartTime))
+                .map(shift -> Map.<String, Object>of(
+                        "id", shift.getId(),
+                        "name", shift.getName(),
+                        "startTime", shift.getStartTime().toString(),
+                        "endTime", shift.getEndTime().toString()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.ok("Danh sách ca làm", shifts));
+    }
+
+    @GetMapping("/schedules")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getSchedules(
+            HttpServletRequest request,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        Store store = getManagerStore(request);
+        validateRange(from, to);
+        List<Map<String, Object>> schedules = scheduleRepository
+                .findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), from, to)
+                .stream().map(this::scheduleResponse).toList();
+        return ResponseEntity.ok(ApiResponse.ok("Lịch phân ca", schedules));
+    }
+
+    @PostMapping("/schedules")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createSchedule(
+            HttpServletRequest request,
+            @Valid @RequestBody ManagerScheduleRequest body) {
+        Store store = getManagerStore(request);
+        if (body.getDate().isBefore(LocalDate.now())) {
+            throw new BusinessException("Không thể tạo lịch trong quá khứ");
+        }
+        User staff = getStaffInStore(body.getUserId(), store);
+        Shift shift = shiftRepository.findById(body.getShiftId())
+                .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
+        if (scheduleRepository.existsByUserIdAndDateAndShiftId(staff.getId(), body.getDate(), shift.getId())) {
+            throw new BusinessException("Nhân viên đã được phân ca này trong ngày đã chọn");
+        }
+        UserSchedule schedule = scheduleRepository.save(UserSchedule.builder()
+                .user(staff)
+                .shift(shift)
+                .date(body.getDate())
+                .status(ScheduleStatus.PENDING)
+                .published(body.isPublished())
+                .build());
+        String message = body.isPublished() ? "Đã tạo và công bố lịch" : "Đã tạo lịch nháp";
+        return ResponseEntity.ok(ApiResponse.ok(message, scheduleResponse(schedule)));
+    }
+
+    @PutMapping("/schedules/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateSchedule(
+            HttpServletRequest request,
+            @PathVariable Long id,
+            @Valid @RequestBody ManagerScheduleRequest body) {
+        Store store = getManagerStore(request);
+        UserSchedule schedule = scheduleRepository.findById(id)
+                .filter(item -> item.getUser().getStore() != null
+                        && item.getUser().getStore().getId().equals(store.getId()))
+                .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
+        if (body.getDate().isBefore(LocalDate.now())) {
+            throw new BusinessException("Không thể sửa lịch trong quá khứ");
+        }
+        if (schedule.getStatus() != ScheduleStatus.PENDING
+                || attendanceRepository.findByScheduleId(id).isPresent()) {
+            throw new BusinessException("Không thể sửa ca đã bắt đầu chấm công");
+        }
+        User staff = getStaffInStore(body.getUserId(), store);
+        Shift shift = shiftRepository.findById(body.getShiftId())
+                .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
+        boolean duplicate = scheduleRepository.existsByUserIdAndDateAndShiftId(
+                staff.getId(), body.getDate(), shift.getId());
+        if (duplicate && !(schedule.getUser().getId().equals(staff.getId())
+                && schedule.getDate().equals(body.getDate())
+                && schedule.getShift().getId().equals(shift.getId()))) {
+            throw new BusinessException("Nhân viên đã được phân ca này trong ngày đã chọn");
+        }
+        schedule.setUser(staff);
+        schedule.setShift(shift);
+        schedule.setDate(body.getDate());
+        schedule.setPublished(body.isPublished());
+        String message = body.isPublished() ? "Đã cập nhật và công bố lịch" : "Đã cập nhật lịch nháp";
+        return ResponseEntity.ok(ApiResponse.ok(message, scheduleResponse(schedule)));
+    }
+
+    @DeleteMapping("/schedules/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<Void>> deleteSchedule(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        Store store = getManagerStore(request);
+        UserSchedule schedule = scheduleRepository.findById(id)
+                .filter(item -> item.getUser().getStore() != null
+                        && item.getUser().getStore().getId().equals(store.getId()))
+                .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
+        if (schedule.getStatus() != ScheduleStatus.PENDING
+                || attendanceRepository.findByScheduleId(id).isPresent()) {
+            throw new BusinessException("Không thể xóa ca đã bắt đầu chấm công");
+        }
+        scheduleRepository.delete(schedule);
+        return ResponseEntity.ok(ApiResponse.ok("Đã xóa lịch", null));
+    }
+
+    @PostMapping("/schedules/{id}/publish")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> publishSchedule(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        Store store = getManagerStore(request);
+        UserSchedule schedule = scheduleRepository.findById(id)
+                .filter(item -> item.getUser().getStore() != null
+                        && item.getUser().getStore().getId().equals(store.getId()))
+                .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
+        schedule.setPublished(true);
+        return ResponseEntity.ok(ApiResponse.ok("Đã công bố lịch cho nhân viên", scheduleResponse(schedule)));
+    }
+
+    @PostMapping("/staff")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createStaff(
+            HttpServletRequest request,
+            @Valid @RequestBody ManagerStaffRequest body) {
+        Store store = getManagerStore(request);
+        if (store.getStatus() == StoreStatus.CLOSED) {
+            throw new BusinessException("Chi nhánh đã ngừng hoạt động");
+        }
+        if (userRepository.existsByPhone(body.getPhone().trim())) {
+            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống");
+        }
+        long staffCount = userRepository.findByStoreId(store.getId()).stream()
+                .filter(user -> user.getRole() == Role.STAFF).count();
+        if (staffCount >= store.getMaxStaff()) {
+            throw new BusinessException("Chi nhánh đã đạt định biên nhân sự tối đa");
+        }
+        String rawPassword = body.getPassword() == null || body.getPassword().isBlank()
+                ? "123456" : body.getPassword();
+        User staff = userRepository.save(User.builder()
+                .name(body.getName().trim())
+                .phone(body.getPhone().trim())
+                .password(passwordEncoder.encode(rawPassword))
+                .role(Role.STAFF)
+                .store(store)
+                .build());
+        return ResponseEntity.ok(ApiResponse.ok("Đã tạo hồ sơ nhân viên", staffResponse(staff)));
+    }
+
+    @PutMapping("/staff/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateStaff(
+            HttpServletRequest request,
+            @PathVariable Long id,
+            @Valid @RequestBody ManagerStaffRequest body) {
+        Store store = getManagerStore(request);
+        User staff = getStaffInStore(id, store);
+        String phone = body.getPhone().trim();
+        if (!staff.getPhone().equals(phone) && userRepository.existsByPhone(phone)) {
+            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống");
+        }
+        staff.setName(body.getName().trim());
+        staff.setPhone(phone);
+        if (body.getPassword() != null && !body.getPassword().isBlank()) {
+            staff.setPassword(passwordEncoder.encode(body.getPassword()));
+            staff.setDeviceId(null);
+        }
+        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật hồ sơ nhân viên", staffResponse(staff)));
+    }
+
+    @GetMapping("/attendance")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAttendance(
+            HttpServletRequest request,
+            @RequestParam LocalDate date) {
+        Store store = getManagerStore(request);
+        List<Attendance> attendance = attendanceRepository
+                .findByUserStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
+                        store.getId(), date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+        Map<Long, Attendance> bySchedule = attendance.stream().collect(
+                java.util.stream.Collectors.toMap(item -> item.getSchedule().getId(), item -> item));
+        List<UserSchedule> schedules = scheduleRepository
+                .findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+                        store.getId(), date, date);
+        List<Map<String, Object>> records = schedules.stream().map(schedule -> {
+            Attendance record = bySchedule.get(schedule.getId());
+            if (record != null) return attendanceResponse(record);
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("id", null);
+            response.put("userId", schedule.getUser().getId());
+            response.put("userName", schedule.getUser().getName());
+            response.put("shiftName", schedule.getShift().getName());
+            response.put("checkInTime", null);
+            response.put("checkOutTime", null);
+            response.put("status", schedule.getStatus() == ScheduleStatus.ABSENT
+                    || schedule.getShift().getEndTime().isBefore(java.time.LocalTime.now())
+                    ? "ABSENT" : "NOT_CHECKED_IN");
+            return response;
+        }).toList();
+        long checkedIn = attendance.size();
+        long checkedOut = attendance.stream().filter(item -> item.getCheckOutTime() != null).count();
+        long absent = records.stream().filter(item -> "ABSENT".equals(item.get("status"))).count();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("date", date);
+        response.put("total", schedules.size());
+        response.put("checkedIn", checkedIn);
+        response.put("checkedOut", checkedOut);
+        response.put("absent", absent);
+        response.put("records", records);
+        return ResponseEntity.ok(ApiResponse.ok("Chấm công trong ngày", response));
+    }
+
+    @GetMapping("/reports")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getReport(
+            HttpServletRequest request,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        Store store = getManagerStore(request);
+        validateRange(from, to);
+        List<UserSchedule> schedules = scheduleRepository
+                .findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+                        store.getId(), from, to);
+        List<Attendance> attendance = attendanceRepository
+                .findByUserStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
+                        store.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay());
+        long checkedOut = attendance.stream().filter(item -> item.getCheckOutTime() != null).count();
+        long staffCount = userRepository.findByStoreId(store.getId()).stream()
+                .filter(user -> user.getRole() == Role.STAFF).count();
+        double attendanceRate = schedules.isEmpty() ? 0
+                : Math.round((double) attendance.size() * 1000 / schedules.size()) / 10.0;
+
+        Map<LocalDate, long[]> daily = new LinkedHashMap<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            daily.put(date, new long[2]);
+        }
+        for (UserSchedule schedule : schedules) {
+            daily.get(schedule.getDate())[0]++;
+        }
+        for (Attendance record : attendance) {
+            LocalDate date = record.getCheckInTime().toLocalDate();
+            if (daily.containsKey(date)) {
+                daily.get(date)[1]++;
+            }
+        }
+        List<Map<String, Object>> dailyReport = daily.entrySet().stream().map(entry -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("date", entry.getKey());
+            row.put("scheduled", entry.getValue()[0]);
+            row.put("attended", entry.getValue()[1]);
+            return row;
+        }).toList();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("from", from);
+        response.put("to", to);
+        response.put("staffCount", staffCount);
+        response.put("scheduled", schedules.size());
+        response.put("attended", attendance.size());
+        response.put("checkedOut", checkedOut);
+        response.put("openAttendance", attendance.size() - checkedOut);
+        response.put("attendanceRate", attendanceRate);
+        response.put("daily", dailyReport);
+        return ResponseEntity.ok(ApiResponse.ok("Báo cáo chi nhánh", response));
+    }
+
+    @GetMapping("/requests")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getRequests(HttpServletRequest request) {
+        Store store = getManagerStore(request);
+        List<Map<String, Object>> items = branchRequestRepository
+                .findByUserStoreIdOrderByCreatedAtDesc(store.getId())
+                .stream().map(this::requestResponse).toList();
+        return ResponseEntity.ok(ApiResponse.ok("Yêu cầu nhân viên", items));
+    }
+
+    @PutMapping("/requests/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<Map<String, Object>>> decideRequest(
+            HttpServletRequest request,
+            @PathVariable Long id,
+            @Valid @RequestBody BranchRequestDecision body) {
+        Store store = getManagerStore(request);
+        if (body.getStatus() == BranchRequestStatus.PENDING) {
+            throw new BusinessException("Yêu cầu phải được duyệt hoặc từ chối");
+        }
+        BranchRequest branchRequest = branchRequestRepository.findByIdAndUserStoreId(id, store.getId())
+                .orElseThrow(() -> new BusinessException("Không tìm thấy yêu cầu trong chi nhánh"));
+        if (branchRequest.getStatus() != BranchRequestStatus.PENDING) {
+            throw new BusinessException("Yêu cầu này đã được xử lý");
+        }
+        if (body.getManagerNote() != null && body.getManagerNote().length() > 1000) {
+            throw new BusinessException("Ghi chú tối đa 1000 ký tự");
+        }
+        branchRequest.setStatus(body.getStatus());
+        branchRequest.setManagerNote(body.getManagerNote() == null ? null : body.getManagerNote().trim());
+        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật trạng thái yêu cầu", requestResponse(branchRequest)));
+    }
+
+    private Store getManagerStore(HttpServletRequest request) {
+        Object id = request.getAttribute("userId");
+        if (!(id instanceof Long userId)) {
+            throw new BusinessException("Không thể xác định tài khoản quản lý");
+        }
+        User manager = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản quản lý"));
+        if (manager.getRole() != Role.MANAGER || manager.getStore() == null) {
+            throw new BusinessException("Tài khoản chưa được gán vào chi nhánh quản lý");
+        }
+        return storeRepository.findById(manager.getStore().getId())
+                .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh"));
+    }
+
+    private User getStaffInStore(Long userId, Store store) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy nhân viên"));
+        if (user.getRole() != Role.STAFF || user.getStore() == null
+                || !user.getStore().getId().equals(store.getId())) {
+            throw new BusinessException("Nhân viên không thuộc chi nhánh của bạn");
+        }
+        return user;
+    }
+
+    private void validateRange(LocalDate from, LocalDate to) {
+        if (from.isAfter(to) || from.plusMonths(3).isBefore(to)) {
+            throw new BusinessException("Khoảng thời gian không hợp lệ (tối đa 3 tháng)");
+        }
+    }
+
+    private Map<String, Object> staffResponse(User user) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", user.getId());
+        response.put("name", user.getName());
+        response.put("phone", user.getPhone());
+        response.put("role", user.getRole().name());
+        response.put("deviceId", user.getDeviceId());
+        response.put("storeId", user.getStore() != null ? user.getStore().getId() : null);
+        response.put("storeName", user.getStore() != null ? user.getStore().getName() : null);
+        return response;
+    }
+
+    private Map<String, Object> scheduleResponse(UserSchedule schedule) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", schedule.getId());
+        response.put("userId", schedule.getUser().getId());
+        response.put("userName", schedule.getUser().getName());
+        response.put("shiftId", schedule.getShift().getId());
+        response.put("shiftName", schedule.getShift().getName());
+        response.put("startTime", schedule.getShift().getStartTime().toString());
+        response.put("endTime", schedule.getShift().getEndTime().toString());
+        response.put("date", schedule.getDate());
+        response.put("status", schedule.getStatus().name());
+        response.put("published", schedule.isPublished());
+        return response;
+    }
+
+    private Map<String, Object> attendanceResponse(Attendance attendance) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", attendance.getId());
+        response.put("userId", attendance.getUser().getId());
+        response.put("userName", attendance.getUser().getName());
+        response.put("shiftName", attendance.getSchedule().getShift().getName());
+        response.put("checkInTime", attendance.getCheckInTime());
+        response.put("checkOutTime", attendance.getCheckOutTime());
+        response.put("status", attendance.getSchedule().getStatus().name());
+        return response;
+    }
+
+    private Map<String, Object> requestResponse(BranchRequest branchRequest) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", branchRequest.getId());
+        response.put("userId", branchRequest.getUser().getId());
+        response.put("userName", branchRequest.getUser().getName());
+        response.put("type", branchRequest.getType().name());
+        response.put("startDate", branchRequest.getStartDate());
+        response.put("endDate", branchRequest.getEndDate());
+        response.put("reason", branchRequest.getReason());
+        response.put("status", branchRequest.getStatus().name());
+        response.put("managerNote", branchRequest.getManagerNote());
+        response.put("createdAt", branchRequest.getCreatedAt());
+        return response;
+    }
+}

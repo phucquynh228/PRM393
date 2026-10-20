@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 @Repository
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
@@ -19,4 +20,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
      * Lấy lịch sử chấm công của user.
      */
     List<Attendance> findByUserIdOrderByCheckInTimeDesc(Long userId);
+
+    List<Attendance> findByUserStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
+            Long storeId, LocalDateTime from, LocalDateTime to);
 }
