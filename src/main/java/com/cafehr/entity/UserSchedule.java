@@ -35,14 +35,29 @@ public class UserSchedule {
     @Column(nullable = false, length = 20)
     private ScheduleStatus status;
 
+    @Column(nullable = false, columnDefinition = "bit default 1")
+    @Builder.Default
+    private boolean published = true;
+
     public UserSchedule() {
     }
 
     public UserSchedule(Long id, User user, Shift shift, LocalDate date, ScheduleStatus status) {
+        this(id, user, shift, date, status, true);
+    }
+
+    public UserSchedule(
+            Long id,
+            User user,
+            Shift shift,
+            LocalDate date,
+            ScheduleStatus status,
+            boolean published) {
         this.id = id;
         this.user = user;
         this.shift = shift;
         this.date = date;
         this.status = status;
+        this.published = published;
     }
 }

@@ -19,6 +19,9 @@ abstract class ApiClient {
   @GET('/schedules/today')
   Future<ApiResponse<List<ScheduleModel>>> getTodaySchedules();
 
+  @GET('/attendance/history')
+  Future<ApiResponse<dynamic>> getAttendanceHistory();
+
   @POST('/attendance/check-in')
   Future<ApiResponse<dynamic>> checkIn(@Body() CheckInRequest request);
 
@@ -38,7 +41,10 @@ abstract class ApiClient {
   Future<ApiResponse<dynamic>> createStore(@Body() Map<String, dynamic> body);
 
   @PUT('/admin/stores/{id}')
-  Future<ApiResponse<dynamic>> updateStore(@Path("id") int id, @Body() Map<String, dynamic> body);
+  Future<ApiResponse<dynamic>> updateStore(
+    @Path("id") int id,
+    @Body() Map<String, dynamic> body,
+  );
 
   @DELETE('/admin/stores/{id}')
   Future<ApiResponse<dynamic>> deleteStore(@Path("id") int id);
@@ -50,7 +56,10 @@ abstract class ApiClient {
   Future<ApiResponse<dynamic>> createUser(@Body() Map<String, dynamic> body);
 
   @PUT('/admin/users/{id}')
-  Future<ApiResponse<dynamic>> updateUser(@Path("id") int id, @Body() Map<String, dynamic> body);
+  Future<ApiResponse<dynamic>> updateUser(
+    @Path("id") int id,
+    @Body() Map<String, dynamic> body,
+  );
 
   @DELETE('/admin/users/{id}')
   Future<ApiResponse<dynamic>> deleteUser(@Path("id") int id);

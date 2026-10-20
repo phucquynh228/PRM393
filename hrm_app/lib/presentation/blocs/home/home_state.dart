@@ -1,37 +1,62 @@
 import 'package:equatable/equatable.dart';
+
+import '../../../data/models/attendance_record.dart';
 import '../../../data/models/schedule_model.dart';
 
-abstract class HomeState extends Equatable {
-  const HomeState();
-
-  @override
-  List<Object> get props => [];
-}
-
-class HomeInitial extends HomeState {}
-
-class HomeLoading extends HomeState {}
-
-class HomeLoaded extends HomeState {
+class HomeState extends Equatable {
   final List<ScheduleModel> schedules;
-  const HomeLoaded({required this.schedules});
+  final List<AttendanceRecord> attendance;
+  final bool loading, busy, initialized;
+  final int? activeScheduleId;
+  final String? error, message;
+  const HomeState({
+    this.schedules = const [],
+    this.attendance = const [],
+    this.loading = false,
+    this.busy = false,
+    this.initialized = false,
+    this.activeScheduleId,
+    this.error,
+    this.message,
+  });
 
+  AttendanceRecord? openAttendance(int scheduleId) {
+    for (final item in attendance) {
+      if (item.scheduleId == scheduleId && item.checkOutTime == null) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  HomeState copyWith({
+    List<ScheduleModel>? schedules,
+    List<AttendanceRecord>? attendance,
+    bool? loading,
+    bool? busy,
+    bool? initialized,
+    int? activeScheduleId,
+    String? error,
+    String? message,
+  }) => HomeState(
+    schedules: schedules ?? this.schedules,
+    attendance: attendance ?? this.attendance,
+    loading: loading ?? this.loading,
+    busy: busy ?? this.busy,
+    initialized: initialized ?? this.initialized,
+    activeScheduleId: activeScheduleId,
+    error: error,
+    message: message,
+  );
   @override
-  List<Object> get props => [schedules];
-}
-
-class HomeActionSuccess extends HomeState {
-  final String message;
-  const HomeActionSuccess({required this.message});
-
-  @override
-  List<Object> get props => [message];
-}
-
-class HomeError extends HomeState {
-  final String error;
-  const HomeError({required this.error});
-
-  @override
-  List<Object> get props => [error];
+  List<Object?> get props => [
+    schedules,
+    attendance,
+    loading,
+    busy,
+    initialized,
+    activeScheduleId,
+    error,
+    message,
+  ];
 }

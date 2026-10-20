@@ -19,10 +19,20 @@ public interface UserScheduleRepository extends JpaRepository<UserSchedule, Long
      */
     List<UserSchedule> findByUserIdAndDate(Long userId, LocalDate date);
 
+    List<UserSchedule> findByUserIdAndDateAndPublishedTrue(Long userId, LocalDate date);
+
+    List<UserSchedule> findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(
+            Long storeId, LocalDate from, LocalDate to);
+
+    List<UserSchedule> findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+            Long storeId, LocalDate from, LocalDate to);
+
+    boolean existsByUserIdAndDateAndShiftId(Long userId, LocalDate date, Long shiftId);
+
     /**
      * Tìm schedule cụ thể của user vào ngày hôm nay (dùng cho check-in).
      */
-    Optional<UserSchedule> findFirstByUserIdAndDateOrderByIdAsc(Long userId, LocalDate date);
+    Optional<UserSchedule> findFirstByUserIdAndDateAndPublishedTrueOrderByIdAsc(Long userId, LocalDate date);
 
     /**
      * Tìm tất cả schedule ngày hôm nay có shift.startTime = thời gian chỉ định.
@@ -31,7 +41,7 @@ public interface UserScheduleRepository extends JpaRepository<UserSchedule, Long
     @Query("SELECT us FROM UserSchedule us " +
            "JOIN FETCH us.shift s " +
            "JOIN FETCH us.user u " +
-           "WHERE us.date = :date")
+           "WHERE us.date = :date AND us.published = true")
     List<UserSchedule> findSchedulesWithShiftAndUserByDate(
             @Param("date") LocalDate date);
 }
