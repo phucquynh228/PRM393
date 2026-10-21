@@ -55,6 +55,7 @@ void main() async {
 
   final dio = Dio(
     BaseOptions(
+      baseUrl: globalBaseUrl,
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 5),
       sendTimeout: const Duration(seconds: 5),

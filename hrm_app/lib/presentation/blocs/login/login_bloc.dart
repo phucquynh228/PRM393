@@ -1,4 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../core/network/api_error.dart';
 import '../../../domain/usecases/login_usecase.dart';
 import 'login_event.dart';
 import 'login_state.dart';
@@ -19,7 +21,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final response = await loginUseCase(event.phone, event.password);
       emit(LoginSuccess(loginResponse: response));
     } catch (error) {
-      emit(LoginFailure(error: error.toString()));
+      emit(LoginFailure(error: readableApiError(error)));
     }
   }
 }

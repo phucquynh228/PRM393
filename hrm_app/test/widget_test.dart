@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,9 +12,13 @@ import 'package:hrm_app/presentation/screens/admin/dialogs/user_form_dialog.dart
 import 'package:hrm_app/presentation/widgets/app_shell.dart';
 
 class FakeAuthRepository implements AuthRepository {
+  FakeAuthRepository({this.error});
+
+  final Object? error;
+
   @override
   Future<LoginResponse> login(String phone, String password) async =>
-      throw Exception('Sai thông tin đăng nhập');
+      throw error ?? Exception('Sai thông tin đăng nhập');
   @override
   Future<bool> isLoggedIn() async => false;
   @override
@@ -21,6 +26,41 @@ class FakeAuthRepository implements AuthRepository {
 }
 
 void main() {
+  testWidgets('login shows a readable message when the API is unavailable', (
+    tester,
+  ) async {
+    final bloc = LoginBloc(
+      loginUseCase: LoginUseCase(
+        FakeAuthRepository(
+          error: DioException(
+            requestOptions: RequestOptions(path: '/auth/login'),
+            type: DioExceptionType.connectionError,
+            message: 'Connection refused',
+          ),
+        ),
+      ),
+    );
+    addTearDown(bloc.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: BlocProvider.value(value: bloc, child: const LoginScreen()),
+      ),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), '0901000001');
+    await tester.enterText(find.byType(TextFormField).at(1), '123456');
+    await tester.tap(find.widgetWithText(FilledButton, 'Đăng nhập'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Chưa kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('DioException'), findsNothing);
+  });
+
   testWidgets('login validates fields inline and displays server error', (
     tester,
   ) async {

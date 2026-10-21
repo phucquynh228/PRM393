@@ -151,7 +151,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
             '/manager/requests/${request['id']}',
             data: {'status': 'APPROVED', if (note != null) 'managerNote': note},
           );
-          await _cubit.fetch('requests', '/manager/requests');
+          await _reload();
           _message('Đã duyệt yêu cầu.');
         },
       );
@@ -339,8 +339,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
               onFilterChanged: (value) =>
                   setState(() => _requestFilter = value),
               onSend: _cubit.send,
-              onReloadRequests: () =>
-                  _cubit.fetch('requests', '/manager/requests'),
+              onReloadRequests: _reload,
               showMessage: _message,
               cleanError: BranchCubit.cleanError,
             ),

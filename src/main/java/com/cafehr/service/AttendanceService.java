@@ -10,6 +10,7 @@ import com.cafehr.repository.UserRepository;
 import com.cafehr.repository.UserScheduleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
     private final UserScheduleRepository userScheduleRepository;
+    private final EntityManager entityManager;
 
     /** Bán kính Trái Đất tính bằng mét */
     private static final double EARTH_RADIUS_METERS = 6_371_000.0;
@@ -64,7 +66,7 @@ public class AttendanceService {
         // 2. Tìm schedule
         UserSchedule schedule;
         if (request.getScheduleId() != null) {
-            schedule = userScheduleRepository.findById(request.getScheduleId())
+            schedule = userScheduleRepository.findLockedById(request.getScheduleId())
                     .orElseThrow(() -> new BusinessException("Không tìm thấy lịch làm việc với id: " + request.getScheduleId()));
 
             // Verify schedule thuộc về user này
@@ -82,9 +84,15 @@ public class AttendanceService {
         }
 
         // 3. Kiểm tra đã check-in chưa
-        if (schedule.getStatus() == ScheduleStatus.CHECKED_IN ||
-            schedule.getStatus() == ScheduleStatus.CHECKED_OUT) {
-            throw new BusinessException("Bạn đã chấm công cho ca này rồi");
+        boolean overnight = schedule.getDate().equals(LocalDate.now().minusDays(1))
+                && !schedule.getShift().getEndTime().isAfter(schedule.getShift().getStartTime())
+                && LocalDateTime.now().isBefore(StaffViews.end(schedule));
+        if (!schedule.getDate().equals(LocalDate.now()) && !overnight) {
+            throw new BusinessException("Chỉ được check-in ca làm hôm nay");
+        }
+        if (schedule.getStatus() != ScheduleStatus.PENDING
+                || attendanceRepository.findByScheduleId(schedule.getId()).isPresent()) {
+            throw new BusinessException("Ca đã chấm công hoặc không thể chấm công");
         }
 
         // 4. Kiểm tra khoảng cách GPS bằng Haversine
@@ -137,6 +145,8 @@ public class AttendanceService {
     public AttendanceResponse checkOut(Long userId, Long attendanceId) {
         Attendance attendance = attendanceRepository.findById(attendanceId)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy bản ghi chấm công"));
+        userScheduleRepository.findLockedById(attendance.getSchedule().getId());
+        entityManager.refresh(attendance);
 
         // Verify thuộc về user
         if (!attendance.getUser().getId().equals(userId)) {

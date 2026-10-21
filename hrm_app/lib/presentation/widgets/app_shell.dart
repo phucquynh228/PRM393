@@ -51,7 +51,7 @@ class AppShell extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                'Công cụ chi nhánh',
+                'Chức năng khác',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),

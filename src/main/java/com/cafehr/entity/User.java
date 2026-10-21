@@ -13,12 +13,14 @@ import org.hibernate.annotations.Nationalized;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Nationalized
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -45,6 +47,16 @@ public class User {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "store_id")
     private Store store;
+
+    @Column(length = 150)
+    private String email;
+
+    @Column(length = 20)
+    private String emergencyContact;
+
+    @Nationalized
+    @Column(length = 255)
+    private String address;
 
     public User() {
     }

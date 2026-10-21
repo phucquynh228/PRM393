@@ -40,6 +40,12 @@ class StatusBadge extends StatelessWidget {
       'DRAFT' => ('Bản nháp', BadgeVariant.neutral, Icons.edit_outlined),
       'MAINTENANCE' => ('Bảo trì', BadgeVariant.warning, Icons.build_outlined),
       'REJECTED' => ('Từ chối', BadgeVariant.error, Icons.cancel_outlined),
+      'CANCELLED' => ('Đã hủy', BadgeVariant.neutral, Icons.cancel_outlined),
+      'ON_LEAVE' => (
+        'Nghỉ phép',
+        BadgeVariant.info,
+        Icons.beach_access_outlined,
+      ),
       'ABSENT' => ('Vắng mặt', BadgeVariant.error, Icons.person_off_outlined),
       'CLOSED' || 'INACTIVE' => (
         'Ngừng hoạt động',

@@ -2,6 +2,7 @@ package com.cafehr.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 /**
  * Entity lưu cấu hình động của hệ thống (key-value).
@@ -21,6 +22,7 @@ public class SystemConfig {
     @Column(nullable = false, unique = true, length = 100)
     private String configKey;
 
+    @Nationalized
     @Column(nullable = false, length = 500)
     private String configValue;
 

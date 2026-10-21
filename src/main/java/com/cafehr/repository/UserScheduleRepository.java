@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -13,6 +15,13 @@ import java.util.Optional;
 
 @Repository
 public interface UserScheduleRepository extends JpaRepository<UserSchedule, Long> {
+
+    List<UserSchedule> findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+            Long userId, LocalDate from, LocalDate to);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from UserSchedule s where s.id = :id")
+    Optional<UserSchedule> findLockedById(@Param("id") Long id);
 
     /**
      * Tìm tất cả schedule của một user vào ngày cụ thể.

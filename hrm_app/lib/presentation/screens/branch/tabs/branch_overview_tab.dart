@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../employee/staff_helpers.dart';
+
 import '../../../../core/theme/app_theme.dart';
 import '../../../blocs/branch/branch_cubit.dart';
 import '../../../models/dashboard_summary.dart';
@@ -308,7 +310,7 @@ class BranchOverviewTab extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${r['type'] == 'LEAVE' ? 'Nghỉ phép' : 'Đổi ca'} · ${BranchHelpers.formatIsoDate(r['startDate'])}',
+                                    '${requestType(r['type'])} · ${BranchHelpers.formatIsoDate(r['startDate'])}',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall,

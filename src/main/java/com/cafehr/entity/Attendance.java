@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class Attendance {
 
     @Id
@@ -33,11 +34,13 @@ public class Attendance {
 
     private LocalDateTime checkOutTime;
 
-    @Column(nullable = false)
     private Double checkInLat;
 
-    @Column(nullable = false)
     private Double checkInLng;
+
+    @Column(nullable = false, columnDefinition = "bit default 0")
+    @Builder.Default
+    private boolean manuallyAdjusted = false;
 
     public Attendance() {
     }

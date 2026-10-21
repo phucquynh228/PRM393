@@ -5,6 +5,8 @@ import '../../../widgets/empty_state_view.dart';
 import '../../../widgets/status_badge.dart';
 import '../branch_helpers.dart';
 import '../dialogs/branch_request_decision_dialog.dart';
+import '../../employee/staff_helpers.dart';
+import '../dialogs/branch_announcement_dialog.dart';
 
 class BranchRequestsTab extends StatefulWidget {
   final List<Map<String, dynamic>> requests;
@@ -77,9 +79,18 @@ class _BranchRequestsTabState extends State<BranchRequestsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         children: [
-          const PageHeading(
+          PageHeading(
             title: 'Duyệt yêu cầu',
-            subtitle: 'Đơn nghỉ phép và đổi ca từ đội ngũ',
+            subtitle: 'Nghỉ phép, đổi ca và sửa công từ đội ngũ',
+            action: OutlinedButton.icon(
+              onPressed: () => BranchAnnouncementDialog.show(
+                context,
+                widget.onSend,
+                widget.showMessage,
+              ),
+              icon: const Icon(Icons.campaign_outlined),
+              label: const Text('Gửi thông báo'),
+            ),
           ),
           Wrap(
             spacing: 8,
@@ -123,13 +134,26 @@ class _BranchRequestsTabState extends State<BranchRequestsTab> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(item['type'] == 'LEAVE' ? 'Nghỉ phép' : 'Đổi ca'),
+                    Text(requestType(item['type'])),
                     const SizedBox(height: 6),
                     Text(
                       '${BranchHelpers.formatIsoDate(item['startDate'])} → ${BranchHelpers.formatIsoDate(item['endDate'])}',
                     ),
                     const SizedBox(height: 12),
                     Text(item['reason']?.toString() ?? ''),
+                    if (item['sourceScheduleId'] != null)
+                      Text('Ca của nhân viên: #${item['sourceScheduleId']}'),
+                    if (item['targetScheduleId'] != null)
+                      Text('Ca muốn nhận: #${item['targetScheduleId']}'),
+                    if (item['requestedCheckIn'] != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Giờ vào đề xuất: ${stamp(item['requestedCheckIn'])}',
+                      ),
+                      Text(
+                        'Giờ ra đề xuất: ${stamp(item['requestedCheckOut'])}',
+                      ),
+                    ],
                     if (item['managerNote']?.toString().isNotEmpty == true) ...[
                       const SizedBox(height: 12),
                       InlineNotice('Ghi chú: ${item['managerNote']}'),

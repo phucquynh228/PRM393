@@ -9,6 +9,9 @@ import com.cafehr.entity.User;
 import com.cafehr.exception.BusinessException;
 import com.cafehr.repository.BranchRequestRepository;
 import com.cafehr.repository.UserRepository;
+import com.cafehr.service.StaffRequestService;
+import com.cafehr.service.StaffViews;
+import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +27,12 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/requests")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('STAFF')")
 public class BranchRequestController {
 
     private final UserRepository userRepository;
     private final BranchRequestRepository branchRequestRepository;
+    private final StaffRequestService staffRequestService;
 
     @GetMapping("/mine")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getMyRequests(HttpServletRequest request) {
@@ -41,33 +46,14 @@ public class BranchRequestController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> createRequest(
             HttpServletRequest request,
             @Valid @RequestBody BranchRequestCreate body) {
-        User user = getCurrentUser(request);
-        if (user.getRole() != Role.STAFF) {
-            throw new BusinessException("Chỉ nhân viên mới có thể gửi yêu cầu");
-        }
-        if (user.getStore() == null) {
-            throw new BusinessException("Tài khoản chưa được gán vào chi nhánh");
-        }
-        if (body.getEndDate().isBefore(body.getStartDate())) {
-            throw new BusinessException("Ngày kết thúc không được trước ngày bắt đầu");
-        }
-        if (body.getStartDate().isBefore(LocalDate.now())) {
-            throw new BusinessException("Không thể gửi yêu cầu cho ngày trong quá khứ");
-        }
-        String reason = body.getReason().trim();
-        if (reason.length() > 1000) {
-            throw new BusinessException("Lý do tối đa 1000 ký tự");
-        }
-        BranchRequest saved = branchRequestRepository.save(BranchRequest.builder()
-                .user(user)
-                .type(body.getType())
-                .startDate(body.getStartDate())
-                .endDate(body.getEndDate())
-                .reason(reason)
-                .status(BranchRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build());
-        return ResponseEntity.ok(ApiResponse.ok("Đã gửi yêu cầu", toResponse(saved)));
+        return ResponseEntity.ok(ApiResponse.ok("Đã gửi yêu cầu",
+                staffRequestService.create(getCurrentUser(request).getId(), body)));
+    }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> cancel(HttpServletRequest request, @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã hủy yêu cầu",
+                staffRequestService.cancel(getCurrentUser(request).getId(), id)));
     }
 
     private User getCurrentUser(HttpServletRequest request) {
@@ -80,15 +66,6 @@ public class BranchRequestController {
     }
 
     private Map<String, Object> toResponse(BranchRequest item) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("id", item.getId());
-        response.put("type", item.getType().name());
-        response.put("startDate", item.getStartDate());
-        response.put("endDate", item.getEndDate());
-        response.put("reason", item.getReason());
-        response.put("status", item.getStatus().name());
-        response.put("managerNote", item.getManagerNote());
-        response.put("createdAt", item.getCreatedAt());
-        return response;
+        return StaffViews.request(item);
     }
 }

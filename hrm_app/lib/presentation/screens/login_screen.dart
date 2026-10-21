@@ -10,6 +10,7 @@ import '../widgets/content_widgets.dart';
 import 'admin_home_screen.dart';
 import 'branch_manager_screen.dart';
 import 'home_screen.dart';
+import 'employee/staff_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
             final Widget screen = switch (login.role.toUpperCase()) {
               'ADMIN' => AdminHomeScreen(loginResponse: login),
               'MANAGER' => BranchManagerScreen(loginResponse: login),
+              'STAFF' => StaffScreen(name: login.name),
               _ => HomeScreen(name: login.name),
             };
             Navigator.of(context)

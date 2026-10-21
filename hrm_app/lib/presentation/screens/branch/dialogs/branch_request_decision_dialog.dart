@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/content_widgets.dart';
 import '../../employee/request_form.dart';
+import '../../employee/staff_helpers.dart';
 
 class BranchRequestDecisionDialog {
   static Future<void> show(
@@ -42,6 +43,10 @@ class _DecisionState extends State<_Decision> {
 
   Future<void> _save() async {
     if (_saving) return;
+    if (!widget.approved && _note.text.trim().isEmpty) {
+      setState(() => _error = 'Vui lòng nhập lý do từ chối.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -71,7 +76,7 @@ class _DecisionState extends State<_Decision> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '${widget.request['userName']} · ${widget.request['type'] == 'LEAVE' ? 'Nghỉ phép' : 'Đổi ca'}',
+              '${widget.request['userName']} · ${requestType(widget.request['type'])}',
             ),
             const SizedBox(height: 20),
             if (_error != null) ...[
@@ -90,7 +95,7 @@ class _DecisionState extends State<_Decision> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Sau khi duyệt đơn, hãy cập nhật lịch phân ca nếu cần.',
+              'Khi được duyệt, lịch làm hoặc chấm công liên quan sẽ được cập nhật và nhân viên nhận thông báo.',
               style: TextStyle(fontSize: 13),
             ),
           ],

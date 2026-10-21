@@ -22,6 +22,7 @@ public class Store {
     @Column(length = 50)
     private String code; // Mã chuẩn hóa (Ví dụ: HN-CG01)
 
+    @Nationalized
     @Column(nullable = false, length = 150)
     private String name;
 

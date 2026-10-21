@@ -72,7 +72,7 @@ Chưa có thiết bị Android kết nối trong phiên thực hiện. Kiểm th
 
 ## Phạm vi mở rộng cần API
 
-- Lịch tuần cho nhân viên: backend hiện chỉ cung cấp lịch hôm nay cho vai trò này.
+- Lịch tuần/tháng cho nhân viên và các chức năng Staff đầy đủ đã được bổ sung; xem [STAFF_FEATURES.md](STAFF_FEATURES.md).
 - Khoảng cách và trạng thái trong/ngoài vùng trước check-in: cần dữ liệu vị trí chi nhánh cho nhân viên.
 - Chọn nhiều ngôn ngữ: hiện giao diện tiếng Việt; chưa có màn chọn ngôn ngữ hay bộ bản dịch tiếng Anh.
 

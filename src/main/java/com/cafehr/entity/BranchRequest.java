@@ -2,6 +2,7 @@ package com.cafehr.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class BranchRequest {
 
     @Id
@@ -22,7 +24,7 @@ public class BranchRequest {
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     private BranchRequestType type;
 
     @Column(nullable = false)
@@ -31,6 +33,7 @@ public class BranchRequest {
     @Column(nullable = false)
     private LocalDate endDate;
 
+    @Nationalized
     @Column(nullable = false, length = 1000)
     private String reason;
 
@@ -39,12 +42,21 @@ public class BranchRequest {
     @Builder.Default
     private BranchRequestStatus status = BranchRequestStatus.PENDING;
 
+    @Nationalized
     @Column(length = 1000)
     private String managerNote;
 
     @Column(nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    private Long sourceScheduleId;
+    private Long targetScheduleId;
+    private Long sourceShiftId;
+    private Long targetShiftId;
+    private Long targetUserId;
+    private LocalDateTime requestedCheckIn;
+    private LocalDateTime requestedCheckOut;
 
     public BranchRequest() {
     }

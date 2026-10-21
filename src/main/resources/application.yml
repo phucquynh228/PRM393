@@ -12,10 +12,17 @@ spring:
 
   # ============ Microsoft SQL Server ============
   datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=CafeHRM;encrypt=true;trustServerCertificate=true;
+    url: jdbc:sqlserver://localhost:1433;databaseName=CafeHRM;encrypt=true;trustServerCertificate=true;sendStringParametersAsUnicode=true;
     username: sa
     password: 123456
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+  # Align existing varchar columns with @Nationalized before JPA reads them.
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/ensure-unicode.sql
+      encoding: UTF-8
 
   # ============ JPA / Hibernate ============
   jpa:

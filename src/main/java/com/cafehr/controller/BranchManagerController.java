@@ -7,6 +7,10 @@ import com.cafehr.dto.ManagerStaffRequest;
 import com.cafehr.entity.*;
 import com.cafehr.exception.BusinessException;
 import com.cafehr.repository.*;
+import com.cafehr.service.StaffRequestService;
+import com.cafehr.service.StaffNotificationService;
+import com.cafehr.service.StaffViews;
+import com.cafehr.dto.AnnouncementRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +39,8 @@ public class BranchManagerController {
     private final AttendanceRepository attendanceRepository;
     private final BranchRequestRepository branchRequestRepository;
     private final PasswordEncoder passwordEncoder;
+    private final StaffRequestService staffRequestService;
+    private final StaffNotificationService staffNotifications;
 
     @GetMapping("/branch")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBranch(HttpServletRequest request) {
@@ -92,6 +98,7 @@ public class BranchManagerController {
             throw new BusinessException("Không thể tạo lịch trong quá khứ");
         }
         User staff = getStaffInStore(body.getUserId(), store);
+        staffRequestService.assertNoLeave(staff.getId(), body.getDate());
         Shift shift = shiftRepository.findById(body.getShiftId())
                 .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
         if (scheduleRepository.existsByUserIdAndDateAndShiftId(staff.getId(), body.getDate(), shift.getId())) {
@@ -105,6 +112,7 @@ public class BranchManagerController {
                 .published(body.isPublished())
                 .build());
         String message = body.isPublished() ? "Đã tạo và công bố lịch" : "Đã tạo lịch nháp";
+        staffNotifications.scheduleChanged(schedule, "Bạn được phân công ca làm mới");
         return ResponseEntity.ok(ApiResponse.ok(message, scheduleResponse(schedule)));
     }
 
@@ -127,6 +135,7 @@ public class BranchManagerController {
             throw new BusinessException("Không thể sửa ca đã bắt đầu chấm công");
         }
         User staff = getStaffInStore(body.getUserId(), store);
+        staffRequestService.assertNoLeave(staff.getId(), body.getDate());
         Shift shift = shiftRepository.findById(body.getShiftId())
                 .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
         boolean duplicate = scheduleRepository.existsByUserIdAndDateAndShiftId(
@@ -136,11 +145,18 @@ public class BranchManagerController {
                 && schedule.getShift().getId().equals(shift.getId()))) {
             throw new BusinessException("Nhân viên đã được phân ca này trong ngày đã chọn");
         }
+        if (schedule.isPublished() && !schedule.getUser().getId().equals(staff.getId())) {
+            staffNotifications.scheduleChanged(schedule, "Ca làm của bạn đã được chuyển cho nhân viên khác");
+        }
+        if (schedule.isPublished() && !body.isPublished()) {
+            staffNotifications.scheduleChanged(schedule, "Ca làm tạm thu hồi để điều chỉnh");
+        }
         schedule.setUser(staff);
         schedule.setShift(shift);
         schedule.setDate(body.getDate());
         schedule.setPublished(body.isPublished());
         String message = body.isPublished() ? "Đã cập nhật và công bố lịch" : "Đã cập nhật lịch nháp";
+        staffNotifications.scheduleChanged(schedule, "Lịch làm của bạn đã thay đổi");
         return ResponseEntity.ok(ApiResponse.ok(message, scheduleResponse(schedule)));
     }
 
@@ -158,6 +174,7 @@ public class BranchManagerController {
                 || attendanceRepository.findByScheduleId(id).isPresent()) {
             throw new BusinessException("Không thể xóa ca đã bắt đầu chấm công");
         }
+        staffNotifications.scheduleChanged(schedule, "Ca làm đã được quản lý hủy");
         scheduleRepository.delete(schedule);
         return ResponseEntity.ok(ApiResponse.ok("Đã xóa lịch", null));
     }
@@ -172,7 +189,10 @@ public class BranchManagerController {
                 .filter(item -> item.getUser().getStore() != null
                         && item.getUser().getStore().getId().equals(store.getId()))
                 .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
+        staffRequestService.assertNoLeave(schedule.getUser().getId(), schedule.getDate());
+        boolean wasPublished = schedule.isPublished();
         schedule.setPublished(true);
+        if (!wasPublished) staffNotifications.scheduleChanged(schedule, "Lịch làm của bạn đã được công bố");
         return ResponseEntity.ok(ApiResponse.ok("Đã công bố lịch cho nhân viên", scheduleResponse(schedule)));
     }
 
@@ -249,8 +269,8 @@ public class BranchManagerController {
             response.put("shiftName", schedule.getShift().getName());
             response.put("checkInTime", null);
             response.put("checkOutTime", null);
-            response.put("status", schedule.getStatus() == ScheduleStatus.ABSENT
-                    || schedule.getShift().getEndTime().isBefore(java.time.LocalTime.now())
+            response.put("status", schedule.getStatus() == ScheduleStatus.ON_LEAVE ? "ON_LEAVE"
+                    : schedule.getStatus() == ScheduleStatus.ABSENT || StaffViews.end(schedule).isBefore(java.time.LocalDateTime.now())
                     ? "ABSENT" : "NOT_CHECKED_IN");
             return response;
         }).toList();
@@ -335,20 +355,17 @@ public class BranchManagerController {
             @PathVariable Long id,
             @Valid @RequestBody BranchRequestDecision body) {
         Store store = getManagerStore(request);
-        if (body.getStatus() == BranchRequestStatus.PENDING) {
-            throw new BusinessException("Yêu cầu phải được duyệt hoặc từ chối");
-        }
-        BranchRequest branchRequest = branchRequestRepository.findByIdAndUserStoreId(id, store.getId())
-                .orElseThrow(() -> new BusinessException("Không tìm thấy yêu cầu trong chi nhánh"));
-        if (branchRequest.getStatus() != BranchRequestStatus.PENDING) {
-            throw new BusinessException("Yêu cầu này đã được xử lý");
-        }
-        if (body.getManagerNote() != null && body.getManagerNote().length() > 1000) {
-            throw new BusinessException("Ghi chú tối đa 1000 ký tự");
-        }
-        branchRequest.setStatus(body.getStatus());
-        branchRequest.setManagerNote(body.getManagerNote() == null ? null : body.getManagerNote().trim());
-        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật trạng thái yêu cầu", requestResponse(branchRequest)));
+        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật trạng thái yêu cầu",
+                staffRequestService.decide(store.getId(), id, body.getStatus(), body.getManagerNote())));
+    }
+
+    @PostMapping("/announcements")
+    @Transactional
+    public ResponseEntity<ApiResponse<Void>> announce(HttpServletRequest request, @Valid @RequestBody AnnouncementRequest body) {
+        Store store = getManagerStore(request);
+        userRepository.findByStoreId(store.getId()).stream().filter(u -> u.getRole() == Role.STAFF)
+                .forEach(u -> staffNotifications.send(u, body.getTitle().trim(), body.getMessage().trim(), "ANNOUNCEMENT"));
+        return ResponseEntity.ok(ApiResponse.ok("Đã gửi thông báo đến nhân viên chi nhánh", null));
     }
 
     private Store getManagerStore(HttpServletRequest request) {
@@ -421,17 +438,6 @@ public class BranchManagerController {
     }
 
     private Map<String, Object> requestResponse(BranchRequest branchRequest) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("id", branchRequest.getId());
-        response.put("userId", branchRequest.getUser().getId());
-        response.put("userName", branchRequest.getUser().getName());
-        response.put("type", branchRequest.getType().name());
-        response.put("startDate", branchRequest.getStartDate());
-        response.put("endDate", branchRequest.getEndDate());
-        response.put("reason", branchRequest.getReason());
-        response.put("status", branchRequest.getStatus().name());
-        response.put("managerNote", branchRequest.getManagerNote());
-        response.put("createdAt", branchRequest.getCreatedAt());
-        return response;
+        return StaffViews.request(branchRequest);
     }
 }

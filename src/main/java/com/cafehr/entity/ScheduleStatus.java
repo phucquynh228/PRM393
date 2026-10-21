@@ -7,5 +7,6 @@ public enum ScheduleStatus {
     PENDING,
     CHECKED_IN,
     CHECKED_OUT,
-    ABSENT
+    ABSENT,
+    ON_LEAVE
 }

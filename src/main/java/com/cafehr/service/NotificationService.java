@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -20,7 +22,7 @@ import java.util.List;
  * - Chạy cron job mỗi phút.
  * - Đọc cấu hình `reminder_minutes` từ bảng SystemConfig (mặc định = 10 phút).
  * - Tìm tất cả UserSchedule ngày hôm nay có shift.startTime = (thời gian hiện tại + reminder_minutes).
- * - Gửi FCM notification cho từng user (giả lập).
+ * - Lưu thông báo vào hộp thư trong ứng dụng cho từng nhân viên.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class NotificationService {
 
     private final UserScheduleRepository userScheduleRepository;
     private final SystemConfigRepository systemConfigRepository;
+    private final StaffNotificationService staffNotifications;
 
     /** Giá trị mặc định nếu không tìm thấy config trong DB */
     private static final int DEFAULT_REMINDER_MINUTES = 10;
@@ -37,7 +40,7 @@ public class NotificationService {
      * Cron job chạy mỗi phút (giây 0 của mỗi phút).
      * Kiểm tra và gửi thông báo nhắc nhở trước ca.
      */
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0 * * * * *", zone = "Asia/Ho_Chi_Minh")
     public void sendShiftReminders() {
         log.debug("=== [CRON] Bắt đầu kiểm tra nhắc nhở ca làm việc ===");
 
@@ -47,11 +50,11 @@ public class NotificationService {
 
             // 2. Tính thời gian shift cần nhắc nhở
             //    Nếu bây giờ là 07:50 và reminder = 10 phút -> tìm shift startTime = 08:00
-            LocalTime targetStartTime = LocalTime.now()
+            LocalDateTime target = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))
                     .plusMinutes(reminderMinutes)
                     .truncatedTo(ChronoUnit.MINUTES);
-
-            LocalDate today = LocalDate.now();
+            LocalTime targetStartTime = target.toLocalTime();
+            LocalDate today = target.toLocalDate();
 
             log.debug("[CRON] reminder_minutes={}, targetStartTime={}, date={}",
                     reminderMinutes, targetStartTime, today);
@@ -60,6 +63,7 @@ public class NotificationService {
             List<UserSchedule> schedules = userScheduleRepository
                     .findSchedulesWithShiftAndUserByDate(today)
                     .stream()
+                    .filter(s -> s.getStatus() == com.cafehr.entity.ScheduleStatus.PENDING)
                     .filter(s -> s.getShift().getStartTime().equals(targetStartTime))
                     .toList();
 
@@ -83,7 +87,8 @@ public class NotificationService {
                         shiftName, startTime, reminderMinutes
                 );
 
-                sendFCMNotification(userId, userName, message);
+                staffNotifications.sendOnce(schedule.getUser(), "Sắp đến giờ vào ca", message, "REMINDER",
+                        "reminder:" + schedule.getId() + ":" + userId + ":" + target);
             }
 
             log.info("[CRON] Đã gửi {} thông báo nhắc nhở", schedules.size());
@@ -121,20 +126,4 @@ public class NotificationService {
                 });
     }
 
-    /**
-     * Giả lập gửi FCM Push Notification.
-     * Trong thực tế, sẽ tích hợp Firebase Admin SDK tại đây.
-     *
-     * @param userId   ID của user nhận thông báo
-     * @param userName Tên user (để log)
-     * @param message  Nội dung thông báo
-     */
-    private void sendFCMNotification(Long userId, String userName, String message) {
-        // =====================================================
-        // TODO: Tích hợp Firebase Admin SDK để gửi push thực tế
-        // FirebaseMessaging.getInstance().send(...)
-        // =====================================================
-
-        log.info("[FCM] >> Gửi thông báo đến user '{}' (id={}): {}", userName, userId, message);
-    }
 }
