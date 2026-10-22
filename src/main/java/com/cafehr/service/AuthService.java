@@ -54,8 +54,12 @@ public class AuthService {
         User user = userRepository.findByPhone(request.getPhone())
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
-        // Bước 3: Device Binding Logic
-        String incomingDeviceId = request.getDeviceId();
+        return createSession(user, request.getDeviceId());
+    }
+
+    /** Shared session behavior for verified phone/password and Google identities. */
+    @Transactional
+    public LoginResponse createSession(User user, String incomingDeviceId) {
 
         if (user.getDeviceId() == null || user.getDeviceId().isBlank()) {
             // Lần đầu đăng nhập -> Bind thiết bị

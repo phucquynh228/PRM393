@@ -19,6 +19,16 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(GoogleAuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleGoogleAuthentication(GoogleAuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(buildErrorBody(HttpStatus.UNAUTHORIZED, ex.getMessage()));
+    }
+
+    @ExceptionHandler(GoogleUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleGoogleUnavailable(GoogleUnavailableException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(buildErrorBody(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()));
+    }
+
     /**
      * Cấu trúc response lỗi chuẩn.
      */

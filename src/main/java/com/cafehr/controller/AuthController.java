@@ -4,6 +4,10 @@ import com.cafehr.dto.ApiResponse;
 import com.cafehr.dto.LoginRequest;
 import com.cafehr.dto.LoginResponse;
 import com.cafehr.service.AuthService;
+import com.cafehr.service.GoogleAuthService;
+import com.cafehr.dto.GoogleLoginRequest;
+import com.cafehr.dto.GoogleLoginResponse;
+import com.cafehr.dto.GoogleLinkRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +23,22 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final GoogleAuthService googleAuthService;
+
+    @GetMapping("/google/config")
+    public ApiResponse<java.util.Map<String, Object>> googleConfig() {
+        return ApiResponse.ok(googleAuthService.configuration());
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<GoogleLoginResponse>> google(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Xác thực Google", googleAuthService.login(request)));
+    }
+
+    @PostMapping("/google/link")
+    public ResponseEntity<ApiResponse<LoginResponse>> linkGoogle(@Valid @RequestBody GoogleLinkRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã liên kết Google", googleAuthService.link(request)));
+    }
 
     /**
      * POST /api/auth/login

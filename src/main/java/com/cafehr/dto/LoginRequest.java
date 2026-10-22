@@ -17,6 +17,7 @@ public class LoginRequest {
     private String phone;
 
     @NotBlank(message = "Mật khẩu không được để trống")
+    @lombok.ToString.Exclude
     private String password;
 
     @NotBlank(message = "Device ID không được để trống")

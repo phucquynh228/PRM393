@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class LoginResponse {
 
+    @lombok.ToString.Exclude
     private String token;
     private String tokenType;
     private Long userId;

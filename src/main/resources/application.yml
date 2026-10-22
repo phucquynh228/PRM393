@@ -21,7 +21,9 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/ensure-unicode.sql
+      schema-locations:
+        - classpath:db/ensure-unicode.sql
+        - classpath:db/repair-legacy-seed-names.sql
       encoding: UTF-8
 
   # ============ JPA / Hibernate ============
@@ -44,6 +46,12 @@ spring:
 jwt:
   secret: Y2FmZWhybS1zZWNyZXQta2V5LXRoaXMtc2hvdWxkLWJlLWF0LWxlYXN0LTI1Ni1iaXRzLWxvbmc=
   expiration-ms: 86400000  # 24 hours
+
+# Google OAuth Web client ID shared with the Android app's serverClientId.
+# Public OAuth identifier for this project; deployments can override it via env.
+google:
+  auth:
+    client-id: ${GOOGLE_WEB_CLIENT_ID:793910679996-kbstvnv0cl5db0hni5jk92rgamrmt1rq.apps.googleusercontent.com}
 
 # ============ Logging ============
 logging:

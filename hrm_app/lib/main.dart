@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'core/services/device_info_service.dart';
+import 'core/services/google_sign_in_service.dart';
+import 'data/repositories/google_auth_repository_impl.dart';
 import 'core/services/location_service.dart';
 import 'data/remote/api_client.dart';
 import 'data/repositories/attendance_repository_impl.dart';
@@ -92,16 +94,25 @@ void main() async {
   );
 
   final loginUseCase = LoginUseCase(authRepository);
+  final googleSignIn = GoogleSignInService(dio);
+  final googleAuth = GoogleAuthRepositoryImpl(
+    dio: dio,
+    google: googleSignIn,
+    device: deviceInfoService,
+    storage: secureStorage,
+  );
   runApp(
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider<Dio>.value(value: dio),
+        RepositoryProvider<GoogleSignInService>.value(value: googleSignIn),
         RepositoryProvider<AttendanceRepository>.value(
           value: attendanceRepository,
         ),
       ],
       child: BlocProvider<LoginBloc>(
-        create: (_) => LoginBloc(loginUseCase: loginUseCase),
+        create: (_) =>
+            LoginBloc(loginUseCase: loginUseCase, googleAuth: googleAuth),
         child: const MyApp(),
       ),
     ),

@@ -27,6 +27,7 @@ public class AdminController {
     private final ShiftRepository shiftRepository;
     private final AttendanceRepository attendanceRepository;
     private final PasswordEncoder passwordEncoder;
+    private final GoogleAccountRepository googleAccounts;
 
     // ================= DASHBOARD BÁO CÁO =================
     @GetMapping("/dashboard")
@@ -247,10 +248,13 @@ public class AdminController {
     }
 
     @DeleteMapping("/users/{id}")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {
             throw new BusinessException("Không tìm thấy tài khoản id: " + id);
         }
+        googleAccounts.findByUserId(id).ifPresent(googleAccounts::delete);
+        googleAccounts.flush();
         userRepository.deleteById(id);
         return ResponseEntity.ok(ApiResponse.ok("Xóa tài khoản thành công", null));
     }

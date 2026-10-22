@@ -7,6 +7,8 @@ import '../blocs/login/login_bloc.dart';
 import '../blocs/login/login_event.dart';
 import '../blocs/login/login_state.dart';
 import '../widgets/content_widgets.dart';
+import '../widgets/google_login_button.dart';
+import 'google_link_dialog.dart';
 import 'admin_home_screen.dart';
 import 'branch_manager_screen.dart';
 import 'home_screen.dart';
@@ -23,6 +25,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
+  bool _linkDialogOpen = false;
+  @override
+  void initState() {
+    super.initState();
+    context.read<LoginBloc>().add(LoginScreenOpened());
+  }
+
   @override
   void dispose() {
     _phone.dispose();
@@ -31,7 +40,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _submit() {
-    if (context.read<LoginBloc>().state is LoginLoading) return;
+    if (context.read<LoginBloc>().state is LoginLoading ||
+        context.read<LoginBloc>().state is GoogleLinkRequired) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
     context.read<LoginBloc>().add(
@@ -44,7 +56,25 @@ class _LoginScreenState extends State<LoginScreen> {
     body: SafeArea(
       child: BlocConsumer<LoginBloc, LoginState>(
         listener: (context, state) {
+          if (state is GoogleLinkRequired && !_linkDialogOpen) {
+            _linkDialogOpen = true;
+            final bloc = context.read<LoginBloc>();
+            showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => BlocProvider.value(
+                value: bloc,
+                child: GoogleLinkDialog(initialPhone: _phone.text.trim()),
+              ),
+            ).then((_) {
+              _linkDialogOpen = false;
+              if (!bloc.isClosed && bloc.state is GoogleLinkRequired) {
+                bloc.add(GoogleLinkCancelled());
+              }
+            });
+          }
           if (state is LoginSuccess) {
+            if (_linkDialogOpen) Navigator.of(context).pop();
             final login = state.loginResponse;
             final Widget screen = switch (login.role.toUpperCase()) {
               'ADMIN' => AdminHomeScreen(loginResponse: login),
@@ -58,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         builder: (context, state) => LayoutBuilder(
           builder: (context, constraints) {
-            final busy = state is LoginLoading;
+            final busy = state is LoginLoading || state is GoogleLinkRequired;
             final wide = constraints.maxWidth >= 900;
             final form = Center(
               child: SingleChildScrollView(
@@ -159,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 24),
                           FilledButton(
                             onPressed: busy ? null : _submit,
-                            child: busy
+                            child: state is LoginLoading && !state.google
                                 ? const SizedBox(
                                     width: 22,
                                     height: 22,
@@ -169,6 +199,38 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : const Text('Đăng nhập'),
                           ),
+                          const SizedBox(height: 16),
+                          const Row(
+                            children: [
+                              Expanded(child: Divider()),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 14),
+                                child: Text('Hoặc'),
+                              ),
+                              Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          GoogleLoginButton(
+                            busy: busy,
+                            onPressed: () {
+                              FocusScope.of(context).unfocus();
+                              context.read<LoginBloc>().add(
+                                const GoogleLoginPressed(),
+                              );
+                            },
+                            onIdToken: (token) => context.read<LoginBloc>().add(
+                              GoogleLoginPressed(idToken: token),
+                            ),
+                            onError: (message) => context.read<LoginBloc>().add(
+                              GoogleLoginFailed(message),
+                            ),
+                          ),
+                          if (state is LoginLoading && state.google)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: LinearProgressIndicator(),
+                            ),
                           const SizedBox(height: 16),
                           const Text(
                             'Tài khoản được cấp bởi quản lý hoặc quản trị viên.',
