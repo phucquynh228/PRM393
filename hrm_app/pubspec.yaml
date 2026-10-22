@@ -31,6 +31,9 @@ dependencies:
 
   # GPS & Device Info
   geolocator: ^11.0.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.9.1
+  url_launcher: ^6.3.2
   device_info_plus: ^9.1.2
   google_sign_in: ^7.2.0
   google_sign_in_web: ^1.1.3

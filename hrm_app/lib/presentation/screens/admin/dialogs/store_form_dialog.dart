@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../../core/services/location_service.dart';
 import '../../../widgets/adaptive_form.dart';
 import '../../../widgets/content_widgets.dart';
+import '../../../widgets/store_location_picker.dart';
 import '../../employee/request_form.dart';
 
 class StoreFormDialog extends StatefulWidget {
   final Map<String, dynamic>? store;
   final List<dynamic> users;
   final LocationService locationService;
+  final TileProvider? mapTileProvider;
   final Future<void> Function(Map<String, dynamic>) onSubmit;
   final void Function(String, {bool isError}) showSnackBar;
   const StoreFormDialog({
@@ -16,6 +20,7 @@ class StoreFormDialog extends StatefulWidget {
     this.store,
     required this.users,
     required this.locationService,
+    this.mapTileProvider,
     required this.onSubmit,
     required this.showSnackBar,
   });
@@ -43,7 +48,9 @@ class StoreFormDialog extends StatefulWidget {
 
 class _StoreFormDialogState extends State<StoreFormDialog> {
   final _form = GlobalKey<FormState>();
-  late final TextEditingController _code, _name, _lat, _lng, _radius, _capacity;
+  final _locationField = GlobalKey<FormFieldState<LatLng>>();
+  late final TextEditingController _code, _name, _radius, _capacity;
+  LatLng? _initialLocation;
   String _status = 'ACTIVE';
   int? _manager;
   bool _saving = false, _gps = false;
@@ -54,8 +61,16 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
     final s = widget.store;
     _code = TextEditingController(text: s?['code']?.toString() ?? '');
     _name = TextEditingController(text: s?['name']?.toString() ?? '');
-    _lat = TextEditingController(text: s?['latitude']?.toString() ?? '');
-    _lng = TextEditingController(text: s?['longitude']?.toString() ?? '');
+    final lat = double.tryParse(s?['latitude']?.toString() ?? '');
+    final lng = double.tryParse(s?['longitude']?.toString() ?? '');
+    if (lat != null &&
+        lng != null &&
+        lat.isFinite &&
+        lng.isFinite &&
+        lat.abs() <= 90 &&
+        lng.abs() <= 180) {
+      _initialLocation = LatLng(lat, lng);
+    }
     _radius = TextEditingController(
       text: s?['allowedRadius']?.toString() ?? '200',
     );
@@ -66,7 +81,7 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
 
   @override
   void dispose() {
-    for (final c in [_code, _name, _lat, _lng, _radius, _capacity]) {
+    for (final c in [_code, _name, _radius, _capacity]) {
       c.dispose();
     }
     super.dispose();
@@ -74,35 +89,9 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
 
   String? _required(String? s) =>
       s == null || s.trim().isEmpty ? 'Vui lòng nhập thông tin' : null;
-  String? _number(String? s, double min, double max) {
-    final value = double.tryParse(s?.trim() ?? '');
-    return value == null || !value.isFinite || value < min || value > max
-        ? 'Nhập số từ $min đến $max'
-        : null;
-  }
-
-  Future<void> _getGps() async {
-    setState(() {
-      _gps = true;
-      _error = null;
-    });
-    try {
-      final pos = await widget.locationService.getCurrentPosition();
-      if (mounted) {
-        setState(() {
-          _lat.text = pos.latitude.toStringAsFixed(6);
-          _lng.text = pos.longitude.toStringAsFixed(6);
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = requestError(e));
-    } finally {
-      if (mounted) setState(() => _gps = false);
-    }
-  }
 
   Future<void> _save() async {
-    if (_saving || !_form.currentState!.validate()) return;
+    if (_saving || _gps || !_form.currentState!.validate()) return;
     if (widget.store?['managerId'] != null &&
         _manager != widget.store?['managerId']) {
       final yes = await showDialog<bool>(
@@ -134,8 +123,8 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
       await widget.onSubmit({
         'code': _code.text.trim().toUpperCase(),
         'name': _name.text.trim(),
-        'latitude': double.parse(_lat.text.trim()),
-        'longitude': double.parse(_lng.text.trim()),
+        'latitude': _locationField.currentState!.value!.latitude,
+        'longitude': _locationField.currentState!.value!.longitude,
         'allowedRadius': int.parse(_radius.text.trim()),
         'maxStaff': int.parse(_capacity.text.trim()),
         'status': _status,
@@ -250,42 +239,44 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
             'Vị trí chấm công',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Nhập tọa độ của quán hoặc lấy vị trí khi đang có mặt tại quán.',
-          ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _lat,
-            enabled: !_saving && !_gps,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-              signed: true,
+          FormField<LatLng>(
+            key: _locationField,
+            initialValue: _initialLocation,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            validator: (point) => point == null
+                ? 'Vui lòng chọn vị trí quán trên bản đồ hoặc lấy vị trí hiện tại.'
+                : null,
+            builder: (field) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                StoreLocationPicker(
+                  value: field.value,
+                  onChanged: field.didChange,
+                  locationService: widget.locationService,
+                  onLocatingChanged: (value) => setState(() => _gps = value),
+                  radius: double.tryParse(_radius.text.trim()) ?? 0,
+                  enabled: !_saving,
+                  tileProvider: widget.mapTileProvider,
+                ),
+                if (field.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      field.errorText!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            validator: (s) => _number(s, -90, 90),
-            decoration: const InputDecoration(labelText: 'Vĩ độ'),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _lng,
-            enabled: !_saving && !_gps,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-              signed: true,
-            ),
-            validator: (s) => _number(s, -180, 180),
-            decoration: const InputDecoration(labelText: 'Kinh độ'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _saving || _gps ? null : _getGps,
-            icon: const Icon(Icons.my_location),
-            label: Text(_gps ? 'Đang lấy vị trí…' : 'Lấy vị trí hiện tại'),
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _radius,
             enabled: !_saving,
+            onChanged: (_) => setState(() {}),
             keyboardType: TextInputType.number,
             validator: (s) =>
                 int.tryParse(s?.trim() ?? '') == null ||
