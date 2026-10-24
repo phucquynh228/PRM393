@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:hrm_app/data/models/attendance_record.dart';
-import 'package:hrm_app/data/models/schedule_model.dart';
-import 'package:hrm_app/domain/repositories/attendance_repository.dart';
+import 'package:hrm_app/features/attendance/data/models/attendance_record.dart';
+import 'package:hrm_app/features/schedule/data/models/schedule_model.dart';
+import 'package:hrm_app/features/attendance/domain/repositories/attendance_repository.dart';
 
 class FakeAttendanceRepository implements AttendanceRepository {
   List<ScheduleModel> schedules = [

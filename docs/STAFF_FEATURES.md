@@ -57,7 +57,7 @@ API lịch bổ sung:
 - Chấm công tiếp tục dùng `/api/attendance/check-in` và `/api/attendance/check-out/{attendanceId}`; check-out sử dụng ID bản ghi chấm công.
 
 Backend chính: `StaffWorkspaceService`, `StaffRequestService`, `StaffNotificationService`, `StaffViews`, `StaffController`.
-Flutter chính: `StaffScreen`, `StaffCubit`, `StaffRepository` và các form/tab trong `lib/presentation/screens/employee/staff_*`.
+Flutter chính: `StaffScreen`, `StaffCubit`, `StaffRepository` và các form/tab trong `lib/features/staff/presentation/`.
 
 `db/ensure-unicode.sql` chạy trước JPA để nâng cấp dữ liệu cũ: cột Unicode, kiểu yêu cầu dài 30 ký tự, enum mới và tọa độ nullable cho bản ghi sửa công. Hibernate tiếp tục thêm bảng/cột mới bằng `ddl-auto: update`. Không xóa bảng hoặc dữ liệu cũ. Seeder không đặt lại tên đã được sửa trong hồ sơ.
 
@@ -78,7 +78,7 @@ Tại `hrm_app`:
 ```powershell
 flutter analyze --no-pub
 flutter test --no-pub
-flutter test --no-pub test/staff_test.dart --dart-define=CAPTURE_UI=true
+flutter test --no-pub test/features/staff/staff_test.dart --dart-define=CAPTURE_UI=true
 flutter build apk --debug --no-pub
 flutter run -d emulator-5554
 ```

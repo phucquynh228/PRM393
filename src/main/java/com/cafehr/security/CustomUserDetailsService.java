@@ -1,7 +1,7 @@
 package com.cafehr.security;
 
-import com.cafehr.entity.User;
-import com.cafehr.repository.UserRepository;
+import com.cafehr.user.entity.User;
+import com.cafehr.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
