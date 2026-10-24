@@ -39,7 +39,9 @@ public final class StaffViews {
                 "shiftId", schedule.getShift().getId(), "date", schedule.getDate(),
                 "startTime", schedule.getShift().getStartTime(), "endTime", schedule.getShift().getEndTime(),
                 "startsAt", start(schedule), "endsAt", end(schedule), "status", schedule.getStatus().name(),
-                "storeName", store == null ? null : store.getName(), "storeCode", store == null ? null : store.getCode());
+                "storeName", store == null ? null : store.getName(), "storeCode", store == null ? null : store.getCode(),
+                "storeId", store == null ? null : store.getId(), "published", schedule.isPublished(),
+                "breakMinutes", schedule.getShift().getBreakMinutes());
     }
 
     public static Map<String, Object> attendance(Attendance attendance) {

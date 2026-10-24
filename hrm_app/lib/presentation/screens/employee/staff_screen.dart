@@ -228,6 +228,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                 _dashboard(state),
                 _attendance(state),
                 StaffScheduleTab(
+                  request: () => _create(),
                   state: state,
                   refresh: () => cubit.load(),
                   change: ({anchor, month}) =>

@@ -103,7 +103,9 @@ class _ScheduleFormState extends State<_ScheduleForm> {
   late int _staff =
       widget.schedule?['userId'] as int? ?? widget.staff.first['id'] as int;
   late int _shift =
-      widget.schedule?['shiftId'] as int? ?? widget.shifts.first['id'] as int;
+      widget.shifts.any((s) => s['id'] == widget.schedule?['shiftId'])
+      ? widget.schedule!['shiftId'] as int
+      : widget.shifts.first['id'] as int;
   late DateTime _day =
       DateTime.tryParse(widget.schedule?['date']?.toString() ?? '') ??
       widget.initialDate;
@@ -118,12 +120,13 @@ class _ScheduleFormState extends State<_ScheduleForm> {
     if (widget.schedules.any(
       (s) =>
           s['userId'] == _staff &&
-          s['shiftId'] == _shift &&
-          s['date'] == BranchHelpers.dateToYmd(_day) &&
+          s['status'] != 'ON_LEAVE' &&
+          _overlaps(s) &&
           s['id'] != widget.schedule?['id'],
     )) {
       setState(
-        () => _error = 'Nhân viên đã được phân ca này trong ngày đã chọn.',
+        () => _error =
+            'Nhân viên có ca chồng lấn thời gian. Hãy chọn giờ hoặc ngày khác.',
       );
       return;
     }
@@ -156,6 +159,22 @@ class _ScheduleFormState extends State<_ScheduleForm> {
     }
   }
 
+  bool _overlaps(Map<String, dynamic> other) {
+    final shift = widget.shifts.firstWhere((s) => s['id'] == _shift);
+    DateTime at(DateTime day, dynamic time) =>
+        DateTime.parse('${BranchHelpers.dateToYmd(day)}T$time');
+    final start = at(_day, shift['startTime']);
+    var end = at(_day, shift['endTime']);
+    if (!end.isAfter(start)) end = end.add(const Duration(days: 1));
+    final day = DateTime.parse('${other['date']}');
+    final otherStart = at(day, other['startTime']);
+    var otherEnd = at(day, other['endTime']);
+    if (!otherEnd.isAfter(otherStart)) {
+      otherEnd = otherEnd.add(const Duration(days: 1));
+    }
+    return start.isBefore(otherEnd) && otherStart.isBefore(end);
+  }
+
   @override
   Widget build(BuildContext context) => AdaptiveForm(
     title: widget.schedule == null ? 'Phân ca mới' : 'Chỉnh sửa ca',
@@ -177,6 +196,12 @@ class _ScheduleFormState extends State<_ScheduleForm> {
         children: [
           if (_error != null) ...[
             InlineNotice(_error!, error: true),
+            const SizedBox(height: 16),
+          ],
+          if (widget.schedule?['published'] == true) ...[
+            const InlineNotice(
+              'Lịch đã công bố. Nhân viên bị ảnh hưởng sẽ nhận thông báo khi bạn lưu thay đổi.',
+            ),
             const SizedBox(height: 16),
           ],
           DropdownButtonFormField<int>(

@@ -15,6 +15,7 @@ import 'admin/tabs/admin_accounts_tab.dart';
 import 'admin/tabs/admin_attendance_tab.dart';
 import 'admin/tabs/admin_branches_tab.dart';
 import 'admin/tabs/admin_overview_tab.dart';
+import 'admin/tabs/admin_schedule_tab.dart';
 import 'login_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
@@ -149,6 +150,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         AppDestination('Chi nhánh', Icons.storefront_outlined),
         AppDestination('Tài khoản', Icons.people_outline),
         AppDestination('Chấm công', Icons.fact_check_outlined),
+        AppDestination('Lịch làm', Icons.calendar_month_outlined),
       ],
       onRefresh: () => _cubit.load(),
       onLogout: _logout,
@@ -189,6 +191,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   attendanceList: state.attendance,
                   onRefresh: _cubit.load,
                 ),
+                AdminScheduleTab(dio: _dio, stores: state.stores),
               ],
             ),
     ),

@@ -7,7 +7,7 @@ Tài khoản mẫu: `0901000003` / `123456` (nếu chưa đổi mật khẩu).
 
 1. **Trang chủ**: ca hôm nay, chi nhánh, trạng thái ca, check-in/check-out, tổng giờ thực tế và giờ được phân công của tuần hiện tại, thông báo và yêu cầu gần đây.
 2. **Chấm công**: vào/ra ca bằng API hiện có, lịch sử, khoảng ngày, bộ lọc đi muộn/về sớm/chưa ra ca, thời lượng thực tế và yêu cầu sửa công.
-3. **Lịch làm**: xem theo tuần hoặc tháng, chuyển khoảng ngày, xem chi tiết ca và gửi yêu cầu đổi ca. Chỉ lịch đã công bố mới xuất hiện.
+3. **Lịch làm**: xem theo tuần hoặc tháng, chọn ngày trên thanh thứ Hai–Chủ nhật, xem số ca mỗi ngày hoặc cả tuần. Ca sắp tới hiển thị trước; thẻ ca có giờ, chi nhánh, thời gian nghỉ và ghi chú qua đêm. Xem chi tiết, đề nghị đổi ca hoặc dùng nút cuối danh sách để gửi yêu cầu đổi ca/xin nghỉ. Chỉ lịch đã công bố mới xuất hiện.
 4. **Yêu cầu**: nghỉ phép, nghỉ không lương, đổi ca, điều chỉnh chấm công; lọc theo loại/trạng thái; xem ghi chú quản lý và hủy đơn còn hợp lệ.
 5. **Thông báo**: phân công/thay đổi/hủy lịch, nhắc giờ vào ca, kết quả duyệt đơn và thông báo từ quản lý; đánh dấu đã đọc từng thông báo hoặc tất cả.
 6. **Hồ sơ**: mã nhân viên dạng `NV-xxxx`, tên, số điện thoại, chức vụ, chi nhánh, email, liên hệ khẩn cấp, địa chỉ; cập nhật thông tin cá nhân, đổi mật khẩu và đăng xuất.
@@ -28,6 +28,24 @@ Tài khoản mẫu: `0901000003` / `123456` (nếu chưa đổi mật khẩu).
 - Quản lý gửi thông báo ở **Yêu cầu → Gửi thông báo**. Duyệt đơn tự cập nhật lịch/công và tạo thông báo, không cần chỉnh lại bằng tay.
 
 ## API và mã nguồn
+
+### Phân quyền và quản lý lịch
+
+- **Admin → Lịch làm → Lịch chi nhánh**: xem lịch nháp và đã công bố của toàn chuỗi theo tuần, lọc chi nhánh. Không trực tiếp phân công nhân viên.
+- **Admin → Lịch làm → Mẫu ca**: tạo/sửa tên, giờ bắt đầu/kết thúc, số phút nghỉ; bật/tắt cho phép sử dụng. Mẫu dùng chung toàn chuỗi. Không xóa mẫu có lịch sử; khi sửa nội dung mẫu đã được sử dụng, hệ thống ngừng mẫu cũ và tạo phiên bản mới để giữ nguyên giờ của các lịch đã tạo. Nháp dùng mẫu cũ cần chọn lại mẫu đang hoạt động trước khi công bố.
+- **Manager → Lịch làm**: xem ngày/tuần/tháng, lọc nháp/đã công bố, chọn ngày trong tuần, xem mẫu ca đang hoạt động, phân công từng ca và công bố toàn bộ ca nháp trong khoảng đang xem. Nếu một ca không hợp lệ, toàn bộ thao tác công bố bị từ chối và giữ nguyên nháp.
+- Chỉ Manager cùng chi nhánh được phân ca. Backend kiểm tra chồng giờ trên tất cả lịch, gồm nháp và ca qua đêm; hai ca sát giờ kết thúc/bắt đầu được phép. Ca `ON_LEAVE` không gây trùng giờ, nhưng ngày đã duyệt nghỉ vẫn bị chặn phân ca.
+- Không phân/công bố ca đã bắt đầu, mẫu đã ngừng sử dụng hoặc nhân viên không hợp lệ. Không sửa/xóa ca đã bắt đầu hoặc đã chấm công. Khi sửa, thu hồi hoặc hủy lịch đã công bố, nhân viên bị ảnh hưởng nhận thông báo trong app.
+- Đổi ca vẫn cần Manager duyệt và kiểm tra lại cả lịch nháp; duyệt nghỉ/đổi ca khóa nhân viên để phối hợp với thao tác phân ca. Staff không có API sửa lịch chính thức.
+- Chưa bật đăng ký ca mong muốn; dùng luồng phân ca và yêu cầu hiện có để tránh thêm bước vận hành chưa cần thiết.
+
+API lịch bổ sung:
+
+- `GET/POST /api/admin/shifts`, `PUT /api/admin/shifts/{id}`: quản lý mẫu ca, gồm `breakMinutes` và `active`.
+- `GET /api/admin/schedules?from=yyyy-MM-dd&to=yyyy-MM-dd&storeId=...`: xem lịch toàn chuỗi; `storeId` tùy chọn, tối đa 3 tháng.
+- `GET /api/manager/shifts`: chỉ trả mẫu đang hoạt động.
+- `POST /api/manager/schedules/publish?from=yyyy-MM-dd&to=yyyy-MM-dd`: kiểm tra và công bố tất cả ca nháp trong phạm vi chi nhánh, trong một transaction.
+- Cột `shifts.active` mặc định `1`, `shifts.break_minutes` mặc định `0`; script nâng cấp giữ dữ liệu cũ. Số phút nghỉ là thông tin của mẫu ca, chưa thay đổi cách tính giờ chấm công/lương.
 
 - `GET /api/staff/workspace?from=yyyy-MM-dd&to=yyyy-MM-dd`: dữ liệu tổng hợp theo tài khoản đang đăng nhập; khoảng lịch tối đa 63 ngày.
 - `GET /api/staff/request-options`: ca của mình gần đây/sắp tới và các ca có thể xin đổi cùng chi nhánh.

@@ -16,6 +16,13 @@ import java.util.Optional;
 @Repository
 public interface UserScheduleRepository extends JpaRepository<UserSchedule, Long> {
 
+    boolean existsByShiftId(Long shiftId);
+
+    List<UserSchedule> findByDateBetweenOrderByDateAscShiftStartTimeAsc(LocalDate from, LocalDate to);
+
+    List<UserSchedule> findByUserIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(
+            Long userId, LocalDate from, LocalDate to);
+
     List<UserSchedule> findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
             Long userId, LocalDate from, LocalDate to);
 

@@ -20,6 +20,7 @@ class StaffRequestServiceTest {
     @Mock AttendanceRepository attendance;
     @Mock StaffWorkspaceService workspace;
     @Mock StaffNotificationService notifications;
+    @Mock UserRepository users;
     @InjectMocks StaffRequestService service;
     Store store;
     User staff, peer;
@@ -28,6 +29,8 @@ class StaffRequestServiceTest {
         store = Store.builder().id(1L).name("Cafe Thủ Đức").build();
         staff = User.builder().id(3L).name("Nhân viên").role(Role.STAFF).store(store).build();
         peer = User.builder().id(4L).name("Đồng nghiệp").role(Role.STAFF).store(store).build();
+        lenient().when(users.findLockedById(staff.getId())).thenReturn(Optional.of(staff));
+        lenient().when(users.findLockedById(peer.getId())).thenReturn(Optional.of(peer));
     }
     UserSchedule shift(long id, User user, LocalDate date, int start, int end) {
         return UserSchedule.builder().id(id).user(user).date(date).status(ScheduleStatus.PENDING)
@@ -121,7 +124,8 @@ class StaffRequestServiceTest {
         when(workspace.staff(staff.getId())).thenReturn(staff);
         when(schedules.findLockedById(10L)).thenReturn(Optional.of(source));
         when(schedules.findLockedById(20L)).thenReturn(Optional.of(target));
-        when(schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+        conflict.setPublished(false);
+        when(schedules.findByUserIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(
                 staff.getId(), date.minusDays(1), date.plusDays(1))).thenReturn(List.of(conflict));
         BranchRequestCreate body = new BranchRequestCreate(); body.setType(BranchRequestType.SHIFT_SWAP);
         body.setReason("Đổi ca"); body.setSourceScheduleId(10L); body.setTargetScheduleId(20L);

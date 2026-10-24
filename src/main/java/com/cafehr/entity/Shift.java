@@ -14,6 +14,7 @@ import java.time.LocalTime;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class Shift {
 
     @Id
@@ -30,7 +31,16 @@ public class Shift {
     @Column(nullable = false)
     private LocalTime endTime;
 
+    @Column(nullable = false, columnDefinition = "int default 0")
+    @Builder.Default
+    private int breakMinutes = 0;
+
+    @Column(nullable = false, columnDefinition = "bit default 1")
+    @Builder.Default
+    private boolean active = true;
+
     public Shift() {
+        this.active = true;
     }
 
     public Shift(Long id, String name, LocalTime startTime, LocalTime endTime) {
@@ -38,5 +48,6 @@ public class Shift {
         this.name = name;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.active = true;
     }
 }

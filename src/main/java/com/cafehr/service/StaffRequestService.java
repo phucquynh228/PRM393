@@ -18,6 +18,7 @@ public class StaffRequestService {
     private final AttendanceRepository attendance;
     private final StaffWorkspaceService workspace;
     private final StaffNotificationService notifications;
+    private final UserRepository users;
 
     @Transactional
     public Map<String, Object> create(Long userId, BranchRequestCreate body) {
@@ -119,6 +120,7 @@ public class StaffRequestService {
     }
 
     private void approveLeave(BranchRequest item) {
+        users.findLockedById(item.getUser().getId()).orElseThrow();
         validateLeave(item);
         schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
                 item.getUser().getId(), item.getStartDate(), item.getEndDate()).forEach(s -> {
@@ -148,7 +150,7 @@ public class StaffRequestService {
     }
 
     private void assertNoOverlap(Long userId, UserSchedule incoming, Long removed) {
-        boolean overlap = schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+        boolean overlap = schedules.findByUserIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(
                 userId, incoming.getDate().minusDays(1), incoming.getDate().plusDays(1)).stream()
                 .filter(s -> !s.getId().equals(removed) && s.getStatus() != ScheduleStatus.ON_LEAVE)
                 .anyMatch(s -> start(s).isBefore(end(incoming)) && start(incoming).isBefore(end(s)));
@@ -160,6 +162,8 @@ public class StaffRequestService {
             throw new BusinessException("Đơn đổi ca cũ thiếu ca cụ thể. Nhân viên cần gửi lại đơn mới");
         }
         // Stable lock order for requests involving the same pair.
+        java.util.stream.Stream.of(item.getUser().getId(), item.getTargetUserId()).distinct().sorted()
+                .forEach(id -> users.findLockedById(id).orElseThrow());
         schedule(Math.min(item.getSourceScheduleId(), item.getTargetScheduleId()));
         schedule(Math.max(item.getSourceScheduleId(), item.getTargetScheduleId()));
         UserSchedule source = ownedSchedule(item.getSourceScheduleId(), item.getUser().getId());

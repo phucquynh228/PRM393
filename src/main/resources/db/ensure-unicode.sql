@@ -66,3 +66,8 @@ BEGIN
     EXEC sp_executesql @drop;
     ALTER TABLE dbo.user_schedules ADD CONSTRAINT ck_staff_schedule_status CHECK ([status] IN (''PENDING'', ''CHECKED_IN'', ''CHECKED_OUT'', ''ABSENT'', ''ON_LEAVE''));
 END');
+-- Existing templates remain available after upgrading; no schedule history is removed.
+IF OBJECT_ID(N'dbo.shifts') IS NOT NULL AND COL_LENGTH(N'dbo.shifts', N'active') IS NULL
+    ALTER TABLE dbo.shifts ADD active BIT NOT NULL CONSTRAINT df_shifts_active DEFAULT 1 WITH VALUES;
+IF OBJECT_ID(N'dbo.shifts') IS NOT NULL AND COL_LENGTH(N'dbo.shifts', N'break_minutes') IS NULL
+    ALTER TABLE dbo.shifts ADD break_minutes INT NOT NULL CONSTRAINT df_shifts_break_minutes DEFAULT 0 WITH VALUES;

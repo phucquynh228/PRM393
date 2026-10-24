@@ -4,6 +4,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../widgets/content_widgets.dart';
 import '../../../widgets/empty_state_view.dart';
 import '../../../widgets/status_badge.dart';
+import '../../../widgets/schedule_week_strip.dart';
 import '../branch_helpers.dart';
 import '../dialogs/branch_schedule_sheet.dart';
 
@@ -48,6 +49,36 @@ class BranchScheduleTab extends StatefulWidget {
 
 class _BranchScheduleTabState extends State<BranchScheduleTab> {
   final Set<int> _busy = {};
+  String _filter = 'ALL';
+  DateTime? _day;
+  bool _publishing = false;
+
+  @override
+  void didUpdateWidget(covariant BranchScheduleTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scheduleFrom != widget.scheduleFrom ||
+        oldWidget.schedulePeriod != widget.schedulePeriod) {
+      _day = null;
+    }
+  }
+
+  Future<void> _publishAll() async {
+    if (_publishing) return;
+    setState(() => _publishing = true);
+    try {
+      await widget.onSend(
+        'POST',
+        '/manager/schedules/publish?from=${BranchHelpers.dateToYmd(widget.scheduleFrom)}&to=${BranchHelpers.dateToYmd(widget.scheduleTo)}',
+      );
+      await widget.onReloadSchedules();
+      widget.showMessage('Đã công bố lịch trong khoảng đang xem.');
+    } catch (e) {
+      widget.showMessage(widget.cleanError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
+
   void _form([Map<String, dynamic>? schedule]) => BranchScheduleSheet.show(
     context,
     schedule: schedule,
@@ -271,7 +302,22 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
   @override
   Widget build(BuildContext context) {
     final grouped = <String, List<Map<String, dynamic>>>{};
+    final counts = <String, int>{};
+    final drafts = widget.schedules.where((s) => s['published'] != true).length;
+    final visible = widget.schedules
+        .where(
+          (s) =>
+              (_filter == 'ALL' ||
+                  (_filter == 'DRAFT'
+                      ? s['published'] != true
+                      : s['published'] == true)) &&
+              (_day == null || s['date'] == BranchHelpers.dateToYmd(_day!)),
+        )
+        .toList();
     for (final item in widget.schedules) {
+      counts['${item['date']}'] = (counts['${item['date']}'] ?? 0) + 1;
+    }
+    for (final item in visible) {
       (grouped[item['date']?.toString() ?? ''] ??= []).add(item);
     }
     final dates = grouped.keys.toList()..sort();
@@ -283,8 +329,9 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
           padding: const EdgeInsets.all(20),
           children: [
             PageHeading(
-              title: 'Lịch phân ca',
-              subtitle: 'Sắp xếp đội ngũ và công bố lịch làm việc',
+              title: 'Lịch làm chi nhánh',
+              subtitle:
+                  '${widget.schedules.length} phân công · $drafts nháp · ${widget.schedules.length - drafts} đã công bố',
               action: FilledButton.icon(
                 onPressed: widget.staff.isEmpty || widget.shifts.isEmpty
                     ? null
@@ -338,19 +385,82 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
               ],
             ),
             const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 10,
+              children: [
+                for (final entry in {
+                  'ALL': 'Tất cả',
+                  'DRAFT': 'Bản nháp',
+                  'PUBLISHED': 'Đã công bố',
+                }.entries)
+                  ChoiceChip(
+                    label: Text(entry.value),
+                    selected: _filter == entry.key,
+                    onSelected: (_) => setState(() => _filter = entry.key),
+                  ),
+                FilledButton.tonalIcon(
+                  onPressed: drafts == 0 || _publishing ? null : _publishAll,
+                  icon: const Icon(Icons.publish_outlined),
+                  label: Text(
+                    _publishing ? 'Đang công bố…' : 'Công bố $drafts ca nháp',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (widget.schedulePeriod == 'Week') ...[
+              ScheduleWeekStrip(
+                from: widget.scheduleFrom,
+                selected: _day,
+                counts: counts,
+                onSelected: (day) => setState(() => _day = day),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => setState(() => _day = null),
+                  child: const Text('Xem cả tuần'),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (widget.shifts.isNotEmpty) ...[
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Mẫu ca được phép sử dụng'),
+                children: widget.shifts
+                    .map(
+                      (s) => ListTile(
+                        dense: true,
+                        title: Text(
+                          '${s['name']} · ${s['startTime']} – ${s['endTime']}',
+                        ),
+                        subtitle: Text(
+                          'Nghỉ giữa ca ${s['breakMinutes'] ?? 0} phút',
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (widget.staff.isEmpty || widget.shifts.isEmpty) ...[
               const InlineNotice(
                 'Cần có nhân viên và mẫu ca làm trước khi phân ca.',
               ),
               const SizedBox(height: 16),
             ],
-            if (widget.schedules.isEmpty)
+            if (visible.isEmpty)
               const EmptyStateView(
                 icon: Icons.event_note_outlined,
                 title: 'Chưa có lịch phân ca',
                 message: 'Thêm ca làm mới hoặc chọn khoảng ngày khác.',
               )
-            else if (box.maxWidth >= 1100 && widget.schedulePeriod == 'Week')
+            else if (box.maxWidth >= 1100 &&
+                widget.schedulePeriod == 'Week' &&
+                _day == null &&
+                _filter == 'ALL')
               _weekGrid()
             else
               ...dates.map(

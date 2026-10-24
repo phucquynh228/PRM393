@@ -51,6 +51,11 @@ class StaffShiftCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
+          if ((schedule['breakMinutes'] as num? ?? 0) > 0)
+            Text('Nghỉ giữa ca: ${schedule['breakMinutes']} phút'),
+          if ('${schedule['endTime']}'.compareTo('${schedule['startTime']}') <=
+              0)
+            const Text('Kết thúc vào ngày hôm sau'),
           Text(
             '${schedule['storeName'] ?? 'Chưa gán chi nhánh'}${schedule['storeCode'] == null ? '' : ' · ${schedule['storeCode']}'}',
             style: const TextStyle(color: AppColors.textSecondary),
