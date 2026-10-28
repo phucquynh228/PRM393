@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
 
 import 'package:hrm_app/shared/presentation/widgets/adaptive_form.dart';
 import 'package:hrm_app/shared/presentation/widgets/content_widgets.dart';
@@ -50,6 +51,8 @@ class BranchStaffDetailsSheet {
               icon: const Icon(Icons.calendar_month_outlined),
               label: const Text('Mở lịch phân ca'),
             ),
+            const SizedBox(height: 20),
+            FixedRosterSummary(entries: staff['fixedRoster']),
           ],
         ),
       ),
@@ -104,6 +107,7 @@ class _StaffFormState extends State<_StaffForm> {
   final _password = TextEditingController();
   bool _saving = false;
   String? _error;
+  late Set<String> _fixedRoster = rosterSelection(widget.staff?['fixedRoster']);
   @override
   void dispose() {
     _name.dispose();
@@ -128,6 +132,7 @@ class _StaffFormState extends State<_StaffForm> {
           'name': _name.text.trim(),
           'phone': _phone.text.trim(),
           if (_password.text.isNotEmpty) 'password': _password.text,
+          'fixedRoster': rosterEntries(_fixedRoster),
         },
       );
       if (mounted) Navigator.pop(context);
@@ -198,6 +203,12 @@ class _StaffFormState extends State<_StaffForm> {
                     (s?.length ?? 0) < 6
                 ? 'Mật khẩu tối thiểu 6 ký tự'
                 : null,
+          ),
+          const SizedBox(height: 24),
+          FixedRosterEditor(
+            selected: _fixedRoster,
+            enabled: !_saving,
+            onChanged: (selected) => setState(() => _fixedRoster = selected),
           ),
         ],
       ),

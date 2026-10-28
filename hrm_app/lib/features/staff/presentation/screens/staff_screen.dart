@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -305,6 +306,12 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
   Widget _dashboard(StaffState state) {
     final profile = state.profile, shifts = state.items('today');
     return _list([
+      if (profile['employmentStatus'] == 'WAITING_TRANSFER') ...[
+        const InlineNotice(
+          'Bạn đang chờ điều chuyển chi nhánh. Bạn vẫn xem được lịch sử và thông báo; Admin sẽ bố trí nơi làm mới trước khi phân ca.',
+        ),
+        const SizedBox(height: 14),
+      ],
       SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,6 +726,8 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                   ],
                 ),
               ),
+            FixedRosterSummary(entries: p['fixedRoster']),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 12,
               runSpacing: 12,

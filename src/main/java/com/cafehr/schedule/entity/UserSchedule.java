@@ -1,6 +1,8 @@
 package com.cafehr.schedule.entity;
 
 import com.cafehr.user.entity.User;
+import com.cafehr.branch.entity.Store;
+import org.hibernate.annotations.Nationalized;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -16,6 +18,7 @@ import java.time.LocalDate;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class UserSchedule {
 
     @Id
@@ -27,6 +30,25 @@ public class UserSchedule {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "store_id")
+    private Store store;
+
+    @Nationalized @Column(length = 150)
+    private String storeName;
+
+    @Column(length = 50)
+    private String storeCode;
+
+    @PrePersist
+    public void captureStore() {
+        if (store == null && user != null) store = user.getStore();
+        if (store != null) {
+            if (storeName == null) storeName = store.getName();
+            if (storeCode == null) storeCode = store.getCode();
+        }
+    }
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
 
@@ -36,6 +58,10 @@ public class UserSchedule {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ScheduleStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private ShiftSlot shiftSlot;
 
     @Column(nullable = false, columnDefinition = "bit default 1")
     @Builder.Default

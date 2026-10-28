@@ -23,6 +23,7 @@ spring:
       mode: always
       schema-locations:
         - classpath:db/ensure-unicode.sql
+        - classpath:db/branch-lifecycle.sql
         - classpath:db/repair-legacy-seed-names.sql
       encoding: UTF-8
 

@@ -1,6 +1,7 @@
 package com.cafehr.staff.entity;
 
 import com.cafehr.user.entity.User;
+import com.cafehr.branch.entity.Store;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,6 +25,25 @@ public class BranchRequest {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "store_id")
+    private Store store;
+
+    @Nationalized @Column(length = 150)
+    private String storeName;
+
+    @Column(length = 50)
+    private String storeCode;
+
+    @PrePersist
+    public void captureStore() {
+        if (store == null && user != null) store = user.getStore();
+        if (store != null) {
+            if (storeName == null) storeName = store.getName();
+            if (storeCode == null) storeCode = store.getCode();
+        }
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

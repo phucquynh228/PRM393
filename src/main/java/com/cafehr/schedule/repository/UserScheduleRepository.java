@@ -17,6 +17,37 @@ import java.util.Optional;
 @Repository
 public interface UserScheduleRepository extends JpaRepository<UserSchedule, Long> {
 
+    @Query("""
+            select new com.cafehr.attendance.dto.AttendanceReportRow(
+                s.date, s.id, u.id, u.name,
+                coalesce(s.storeCode, branch.code, currentStore.code),
+                coalesce(s.storeName, branch.name, currentStore.name),
+                shift.name, shift.startTime, shift.endTime, s.status,
+                a.checkInTime, a.checkOutTime, a.manuallyAdjusted)
+            from UserSchedule s
+            join s.user u
+            join s.shift shift
+            left join s.store branch
+            left join u.store currentStore
+            left join Attendance a on a.schedule = s
+            where s.published = true
+                and s.status <> com.cafehr.schedule.entity.ScheduleStatus.CANCELLED
+                and s.date between :from and :to
+                and (:userId is null or u.id = :userId)
+                and (:storeId is null or coalesce(branch.id, currentStore.id) = :storeId)
+            order by s.date, u.id, shift.startTime, s.id, a.id
+            """)
+    List<com.cafehr.attendance.dto.AttendanceReportRow> findAttendanceReport(
+            @Param("from") LocalDate from, @Param("to") LocalDate to,
+            @Param("userId") Long userId, @Param("storeId") Long storeId);
+
+    boolean existsByStoreId(Long storeId);
+    List<UserSchedule> findByStoreIdOrderByDateAscShiftStartTimeAsc(Long storeId);
+    List<UserSchedule> findByUserIdOrderByDateAscShiftStartTimeAsc(Long userId);
+
+    List<UserSchedule> findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(Long storeId, LocalDate from, LocalDate to);
+    List<UserSchedule> findByStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(Long storeId, LocalDate from, LocalDate to);
+
     boolean existsByShiftId(Long shiftId);
 
     List<UserSchedule> findByDateBetweenOrderByDateAscShiftStartTimeAsc(LocalDate from, LocalDate to);

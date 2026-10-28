@@ -15,6 +15,7 @@ class DirectoryList extends StatefulWidget {
   final String initialFilter;
   final DateTime? initialDate;
   final Map<String, String> filterOptions;
+  final List<Widget> additionalFilters;
   final List<String>? columns;
   final List<DataCell> Function(Map<String, dynamic>)? cells;
   const DirectoryList({
@@ -32,6 +33,7 @@ class DirectoryList extends StatefulWidget {
     this.filterField,
     this.dateField,
     this.filterOptions = const {},
+    this.additionalFilters = const [],
     this.columns,
     this.cells,
   });
@@ -123,6 +125,14 @@ class _DirectoryListState extends State<DirectoryList> {
                           setState(() => _filter = value ?? ''),
                     ),
                   ),
+                ...widget.additionalFilters.map(
+                  (filter) => SizedBox(
+                    width: box.maxWidth >= 760
+                        ? 220
+                        : (box.maxWidth - 40).clamp(0, 600).toDouble(),
+                    child: filter,
+                  ),
+                ),
                 if (widget.dateField != null)
                   OutlinedButton.icon(
                     onPressed: () async {

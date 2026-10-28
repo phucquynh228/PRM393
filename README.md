@@ -56,7 +56,10 @@ flutter test --no-pub --concurrency=1
 ## Tài liệu
 
 - [Cấu trúc project](docs/PROJECT_STRUCTURE.md)
+- [Ngừng hoạt động chi nhánh và điều chuyển nhân sự](docs/BRANCH_LIFECYCLE.md)
 - [Chức năng Staff và quản lý lịch](docs/STAFF_FEATURES.md)
+- [Phân ca theo buổi, ca mặc định và định mức](docs/SHIFT_ROSTER.md)
+- [Xuất báo cáo chấm công dành cho admin](docs/ADMIN_ATTENDANCE_REPORT.md)
 - [Giao diện và điều hướng](docs/FRONTEND_REDESIGN.md)
 - [Đăng nhập Google](docs/GOOGLE_LOGIN_SETUP.md)
 - [Chọn vị trí chi nhánh](docs/BRANCH_MAP_PICKER.md)

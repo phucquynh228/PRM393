@@ -29,6 +29,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         return new org.springframework.security.core.userdetails.User(
                 user.getPhone(),
                 user.getPassword(),
+                user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.INACTIVE,
+                true, true, true,
                 Collections.singletonList(
                         new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
                 )

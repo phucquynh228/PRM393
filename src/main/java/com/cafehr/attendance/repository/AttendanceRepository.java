@@ -12,6 +12,10 @@ import java.time.LocalDateTime;
 @Repository
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
+    boolean existsByUserIdAndCheckOutTimeIsNull(Long userId);
+    List<Attendance> findByScheduleStoreIdAndCheckOutTimeIsNull(Long storeId);
+    List<Attendance> findByScheduleStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(Long storeId, LocalDateTime from, LocalDateTime to);
+
     /**
      * Tìm bản ghi chấm công theo scheduleId (kiểm tra đã check-in chưa).
      */

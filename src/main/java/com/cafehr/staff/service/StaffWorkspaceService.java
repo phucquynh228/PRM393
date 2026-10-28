@@ -35,7 +35,7 @@ public class StaffWorkspaceService {
     private final PasswordEncoder passwords;
 
     public User staff(Long userId) {
-        return users.findById(userId).filter(u -> u.getRole() == Role.STAFF)
+        return users.findById(userId).filter(u -> u.getRole() == Role.STAFF && u.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.INACTIVE)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản nhân viên"));
     }
 
@@ -59,7 +59,7 @@ public class StaffWorkspaceService {
         }).sum();
         List<UserSchedule> week = schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
                 userId, monday, monday.plusDays(6));
-        long planned = week.stream().filter(s -> s.getStatus() != ScheduleStatus.ON_LEAVE)
+        long planned = week.stream().filter(s -> s.getStatus() != ScheduleStatus.ON_LEAVE && s.getStatus() != ScheduleStatus.CANCELLED)
                 .mapToLong(s -> Duration.between(start(s), end(s)).toMinutes()).sum();
         return row("profile", profile(user), "today", todaySchedules.stream().map(StaffViews::schedule).toList(),
                 "schedules", schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(userId, from, to)
@@ -77,7 +77,7 @@ public class StaffWorkspaceService {
         List<UserSchedule> mine = schedules.findByUserIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
                 userId, today.minusDays(30), today.plusDays(365));
         List<UserSchedule> peers = user.getStore() == null ? List.of()
-                : schedules.findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+                : schedules.findByStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
                         user.getStore().getId(), today, today.plusDays(365)).stream()
                 .filter(s -> s.getUser().getRole() == Role.STAFF && !s.getUser().getId().equals(userId)
                         && s.getStatus() == ScheduleStatus.PENDING && start(s).isAfter(LocalDateTime.now())).toList();

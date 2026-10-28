@@ -9,6 +9,8 @@ import com.cafehr.branch.dto.StoreResponse;
 import com.cafehr.branch.entity.Store;
 import com.cafehr.branch.entity.StoreStatus;
 import com.cafehr.branch.repository.StoreRepository;
+import com.cafehr.branch.service.BranchLifecycleService;
+import com.cafehr.branch.dto.EmployeePlacement;
 import com.cafehr.common.dto.ApiResponse;
 import com.cafehr.common.exception.BusinessException;
 import com.cafehr.schedule.repository.ShiftRepository;
@@ -34,6 +36,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional
 public class AdminController {
 
     private final StoreRepository storeRepository;
@@ -42,6 +45,7 @@ public class AdminController {
     private final AttendanceRepository attendanceRepository;
     private final PasswordEncoder passwordEncoder;
     private final GoogleAccountRepository googleAccounts;
+    private final BranchLifecycleService branchLifecycle;
 
     // ================= DASHBOARD BÁO CÁO =================
     @GetMapping("/dashboard")
@@ -85,14 +89,10 @@ public class AdminController {
                 .status(status)
                 .build();
 
-        // 4. Bổ nhiệm Cửa hàng trưởng (nếu có)
+        storeRepository.save(store);
+        // Bổ nhiệm sau khi chi nhánh đã có ID; điều chuyển qua cùng một luồng nghiệp vụ.
         if (request.getManagerId() != null) {
-            User manager = userRepository.findById(request.getManagerId())
-                    .orElseThrow(() -> new BusinessException("Không tìm thấy Cửa hàng trưởng với id: " + request.getManagerId()));
-            manager.setRole(Role.MANAGER);
-            manager.setStore(store);
-            userRepository.save(manager);
-            store.setManager(manager);
+            branchLifecycle.assignManager(store.getId(), request.getManagerId());
         }
 
         Store savedStore = storeRepository.save(store);
@@ -101,7 +101,7 @@ public class AdminController {
 
     @PutMapping("/stores/{id}")
     public ResponseEntity<ApiResponse<StoreResponse>> updateStore(@PathVariable Long id, @Valid @RequestBody StoreRequest request) {
-        Store store = storeRepository.findById(id)
+        Store store = storeRepository.findLockedById(id)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh id: " + id));
 
         // 1. Kiểm tra trùng mã nếu đổi mã mới
@@ -117,10 +117,8 @@ public class AdminController {
         StoreStatus newStatus = parseStatus(request.getStatus());
         long currentStaffCount = userRepository.findByStoreId(id).size();
 
-        if (newStatus == StoreStatus.CLOSED && currentStaffCount > 0) {
-            throw new BusinessException("Không thể chuyển chi nhánh '" + store.getName() +
-                    "' sang trạng thái CLOSED (Ngừng hoạt động) vì vẫn còn " + currentStaffCount +
-                    " nhân viên đang trực thuộc. Vui lòng điều chuyển hết nhân viên sang cơ sở khác trước khi đóng cửa.");
+        if (newStatus == StoreStatus.CLOSED && store.getStatus() != StoreStatus.CLOSED) {
+            throw new BusinessException("Hãy dùng Ngừng hoạt động để xử lý nhân sự, lịch và yêu cầu trước khi đóng chi nhánh");
         }
 
         // 3. Kiểm tra RÀNG BUỘC ĐỊNH BIÊN (Max Staff)
@@ -138,21 +136,8 @@ public class AdminController {
         store.setStatus(newStatus);
 
         // 4. Bổ nhiệm Cửa hàng trưởng (Manager Assignment / Succession)
-        if (request.getManagerId() != null) {
-            User newManager = userRepository.findById(request.getManagerId())
-                    .orElseThrow(() -> new BusinessException("Không tìm thấy user id: " + request.getManagerId()));
-
-            User oldManager = store.getManager();
-            if (oldManager != null && !oldManager.getId().equals(newManager.getId())) {
-                // Giáng cấp Cửa hàng trưởng cũ xuống STAFF
-                oldManager.setRole(Role.STAFF);
-                userRepository.save(oldManager);
-            }
-
-            newManager.setRole(Role.MANAGER);
-            newManager.setStore(store);
-            userRepository.save(newManager);
-            store.setManager(newManager);
+        if (request.getManagerId() != null && (store.getManager() == null || !store.getManager().getId().equals(request.getManagerId()))) {
+            branchLifecycle.assignManager(id, request.getManagerId());
         }
 
         Store updatedStore = storeRepository.save(store);
@@ -161,16 +146,7 @@ public class AdminController {
 
     @DeleteMapping("/stores/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteStore(@PathVariable Long id) {
-        Store store = storeRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh id: " + id));
-
-        long currentStaffCount = userRepository.findByStoreId(id).size();
-        if (currentStaffCount > 0) {
-            throw new BusinessException("Không thể xóa chi nhánh '" + store.getName() +
-                    "' vì còn " + currentStaffCount + " nhân viên thuộc cơ sở này. Vui lòng điều chuyển nhân viên trước.");
-        }
-
-        storeRepository.deleteById(id);
+        branchLifecycle.deleteUnused(id);
         return ResponseEntity.ok(ApiResponse.ok("Xóa chi nhánh thành công", null));
     }
 
@@ -189,7 +165,7 @@ public class AdminController {
 
         Store store = null;
         if (request.getStoreId() != null) {
-            store = storeRepository.findById(request.getStoreId())
+            store = storeRepository.findLockedById(request.getStoreId())
                     .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh id: " + request.getStoreId()));
 
             // Validate Store Status & Max Staff
@@ -201,6 +177,7 @@ public class AdminController {
                 : "123456";
 
         Role role = parseRole(request.getRole());
+        if (role == Role.MANAGER && store == null) throw new BusinessException("Manager cần có chi nhánh đang hoạt động");
 
         User user = User.builder()
                 .name(request.getName().trim())
@@ -214,8 +191,7 @@ public class AdminController {
 
         // If assigned as MANAGER, update Store's manager
         if (role == Role.MANAGER && store != null) {
-            store.setManager(savedUser);
-            storeRepository.save(store);
+            branchLifecycle.assignManager(store.getId(), savedUser.getId());
         }
 
         return ResponseEntity.ok(ApiResponse.ok("Tạo tài khoản thành công", toUserResponse(savedUser)));
@@ -241,10 +217,6 @@ public class AdminController {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
         }
 
-        if (request.getRole() != null) {
-            user.setRole(parseRole(request.getRole()));
-        }
-
         // Cập nhật/Điều động Chi nhánh
         if (request.getStoreId() != null) {
             Store newStore = storeRepository.findById(request.getStoreId())
@@ -252,9 +224,22 @@ public class AdminController {
 
             // Nếu điều chuyển sang chi nhánh khác -> kiểm tra định biên & trạng thái chi nhánh mới
             if (user.getStore() == null || !user.getStore().getId().equals(newStore.getId())) {
-                validateStoreForUserAssignment(newStore, user.getId());
+                if (user.getRole() == Role.ADMIN) throw new BusinessException("Admin không cần điều chuyển theo chi nhánh");
+                EmployeePlacement p = new EmployeePlacement(); p.setUserId(id); p.setTargetStoreId(newStore.getId());
+                p.setAction(EmployeePlacement.Action.TRANSFER);
+                branchLifecycle.place(id, p);
             }
-            user.setStore(newStore);
+        }
+
+        if (request.getRole() != null) {
+            Role role = parseRole(request.getRole());
+            if (role == Role.MANAGER) {
+                if (user.getStore() == null) throw new BusinessException("Manager cần có chi nhánh đang hoạt động");
+                branchLifecycle.assignManager(user.getStore().getId(), id);
+            } else {
+                storeRepository.findByManagerId(id).forEach(s -> s.setManager(null));
+                user.setRole(role);
+            }
         }
 
         User updatedUser = userRepository.save(user);
@@ -287,6 +272,8 @@ public class AdminController {
                 .checkInLat(a.getCheckInLat())
                 .checkInLng(a.getCheckInLng())
                 .status(a.getSchedule() != null && a.getSchedule().getStatus() != null ? a.getSchedule().getStatus().name() : "N/A")
+                .storeId(a.getSchedule() == null || com.cafehr.staff.view.StaffViews.store(a.getSchedule()) == null ? null : com.cafehr.staff.view.StaffViews.store(a.getSchedule()).getId())
+                .storeName(a.getSchedule() == null ? null : (String) com.cafehr.staff.view.StaffViews.schedule(a.getSchedule()).get("storeName"))
                 .build()
         ).collect(Collectors.toList());
 
@@ -295,7 +282,8 @@ public class AdminController {
 
     // ================= HELPERS & MAPPERS =================
     private void validateStoreForUserAssignment(Store store, Long userId) {
-        if (store.getStatus() == StoreStatus.CLOSED) {
+        storeRepository.findLockedById(store.getId()).orElseThrow();
+        if (store.getStatus() != StoreStatus.ACTIVE) {
             throw new BusinessException("Chi nhánh '" + store.getName() + "' đang ở trạng thái CLOSED (Ngừng hoạt động). Không thể tiếp nhận nhân viên mới.");
         }
 
@@ -351,6 +339,8 @@ public class AdminController {
                 .managerName(store.getManager() != null ? store.getManager().getName() : "Chưa bổ nhiệm")
                 .managerPhone(store.getManager() != null ? store.getManager().getPhone() : null)
                 .currentStaffCount(currentCount)
+                .canDelete(branchLifecycle.canDelete(store.getId()))
+                .closedAt(store.getClosedAt()).closureReason(store.getClosureReason())
                 .build();
     }
 
@@ -363,6 +353,7 @@ public class AdminController {
                 .storeId(user.getStore() != null ? user.getStore().getId() : null)
                 .storeName(user.getStore() != null ? user.getStore().getName() : "Chưa phân chi nhánh")
                 .deviceId(user.getDeviceId())
+                .employmentStatus(user.getEmploymentStatus().name())
                 .build();
     }
 }

@@ -17,4 +17,5 @@ public class UserResponse {
     private Long storeId;
     private String storeName;
     private String deviceId;
+    private String employmentStatus;
 }

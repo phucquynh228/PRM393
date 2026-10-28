@@ -64,7 +64,8 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
         .toList();
     final now = DateTime.now();
     bool upcoming(StaffItem s) =>
-        DateTime.tryParse('${s['endsAt']}')?.isAfter(now) ?? false;
+        (s['status'] == 'PENDING' || s['status'] == 'CHECKED_IN') &&
+        (DateTime.tryParse('${s['endsAt']}')?.isAfter(now) ?? false);
     items.sort((a, b) {
       if (upcoming(a) != upcoming(b)) return upcoming(a) ? -1 : 1;
       return '${a['startsAt']}'.compareTo('${b['startsAt']}');

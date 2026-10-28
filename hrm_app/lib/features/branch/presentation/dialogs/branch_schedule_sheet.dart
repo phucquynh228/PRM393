@@ -121,6 +121,7 @@ class _ScheduleFormState extends State<_ScheduleForm> {
       (s) =>
           s['userId'] == _staff &&
           s['status'] != 'ON_LEAVE' &&
+          s['status'] != 'CANCELLED' &&
           _overlaps(s) &&
           s['id'] != widget.schedule?['id'],
     )) {

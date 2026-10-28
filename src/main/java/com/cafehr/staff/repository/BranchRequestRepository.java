@@ -13,6 +13,12 @@ import java.util.Optional;
 
 public interface BranchRequestRepository extends JpaRepository<BranchRequest, Long> {
 
+    boolean existsByStoreId(Long storeId);
+    List<BranchRequest> findByStoreIdOrderByCreatedAtDesc(Long storeId);
+
+    @Query("select r from BranchRequest r where r.status = com.cafehr.staff.entity.BranchRequestStatus.PENDING and (r.user.id = :userId or r.targetUserId = :userId)")
+    List<BranchRequest> findPendingInvolvingUser(@Param("userId") Long userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from BranchRequest r where r.id = :id")
     Optional<BranchRequest> findLockedById(@Param("id") Long id);

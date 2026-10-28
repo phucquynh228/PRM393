@@ -81,6 +81,14 @@ class BranchCubit extends Cubit<BranchState> {
   }
 
   Future<void> send(String method, String path, {Object? data}) async {
+    await sendResult(method, path, data: data);
+  }
+
+  Future<Map<String, dynamic>> sendResult(
+    String method,
+    String path, {
+    Object? data,
+  }) async {
     final key = '$method $path';
     if (!_mutations.add(key)) {
       throw Exception('Thao tác đang được xử lý. Vui lòng chờ.');
@@ -95,6 +103,7 @@ class BranchCubit extends Cubit<BranchState> {
       if (body['success'] != true) {
         throw Exception(body['message'] ?? 'Không thực hiện được thao tác');
       }
+      return Map<String, dynamic>.from(body);
     } on DioException catch (e) {
       throw Exception(cleanError(e));
     } finally {

@@ -9,7 +9,6 @@ import 'package:hrm_app/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:hrm_app/shared/presentation/widgets/app_shell.dart';
 import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart';
 import 'package:hrm_app/features/branch/presentation/tabs/branch_overview_tab.dart';
-import 'package:hrm_app/features/branch/presentation/dialogs/branch_schedule_sheet.dart';
 import 'package:hrm_app/features/branch/presentation/dialogs/branch_staff_sheets.dart';
 import 'package:hrm_app/features/branch/presentation/dialogs/branch_request_decision_dialog.dart';
 import 'package:hrm_app/features/branch/presentation/tabs/branch_attendance_tab.dart';
@@ -86,6 +85,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
     await Future.wait([
       _cubit.fetch('branch', '/manager/branch'),
       _cubit.fetch('shifts', '/manager/shifts'),
+      _cubit.fetch('rosterSettings', '/manager/roster/settings'),
       _schedules(),
       _attendance(),
       _cubit.fetch('requests', '/manager/requests'),
@@ -108,21 +108,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
     ]);
   }
 
-  Future<void> _openSchedule() => BranchScheduleSheet.show(
-    context,
-    staff: _cubit.state.staff,
-    shifts: _cubit.state.shifts,
-    schedules: (_cubit.state.resources['dashboardSchedules'] as List? ?? [])
-        .whereType<Map>()
-        .map((s) => Map<String, dynamic>.from(s))
-        .toList(),
-    initialDate: DateUtils.dateOnly(DateTime.now()),
-    onSend: _cubit.send,
-    onReload: _reload,
-    showMessage: _message,
-    cleanError: BranchCubit.cleanError,
-    onPickDate: _pickDate,
-  );
+  Future<void> _openSchedule() async => _navigate(1);
   Future<void> _openStaff() => BranchStaffFormSheet.show(
     context,
     onSend: _cubit.send,
@@ -279,7 +265,9 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
             state.errors[resource] ??
             state.errors['branch'] ??
             (_index == 0 ? state.errors['dashboardSchedules'] : null) ??
-            (_index == 1 ? state.errors['shifts'] : null),
+            (_index == 1
+                ? state.errors['shifts'] ?? state.errors['rosterSettings']
+                : null),
         child: IndexedStack(
           index: _index,
           children: [
@@ -295,9 +283,30 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
             ),
 
             BranchScheduleTab(
+              dataReady:
+                  state.resources.containsKey('rosterSettings') &&
+                  !['branch', 'shifts', 'schedules', 'rosterSettings'].any(
+                    (key) =>
+                        state.loading.contains(key) ||
+                        state.errors.containsKey(key),
+                  ),
               schedules: state.schedules,
               staff: state.staff,
               shifts: state.shifts,
+              plans: (state.resources['rosterSettings'] as List? ?? [])
+                  .whereType<Map>()
+                  .map((p) => Map<String, dynamic>.from(p))
+                  .toList(),
+              onGenerateWeek: (monday) async {
+                final response = await _cubit.sendResult(
+                  'POST',
+                  '/manager/schedules/generate-week',
+                  data: {'weekStart': BranchHelpers.dateToYmd(monday)},
+                );
+                await _schedules();
+                await _dashboard();
+                return Map<String, dynamic>.from(response['data'] as Map);
+              },
               schedulePeriod: _period,
               selectedDate: _scheduleDate,
               scheduleFrom: _from,
@@ -313,6 +322,10 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
               onSend: _cubit.send,
               onReloadSchedules: () async {
                 await _schedules();
+                await _cubit.fetch(
+                  'rosterSettings',
+                  '/manager/roster/settings',
+                );
                 await _dashboard();
               },
               showMessage: _message,
@@ -348,7 +361,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
               branch: state.branch,
               staffQuery: _staffQuery,
               onQueryChanged: (value) => setState(() => _staffQuery = value),
-              onViewShifts: () => setState(() => _index = 1),
+              onViewShifts: () => _navigate(1),
               onSend: _cubit.send,
               onReload: _reload,
               showMessage: _message,

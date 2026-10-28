@@ -51,7 +51,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (phone != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(phone);
 
-                if (jwtUtil.validateToken(jwt, userDetails)) {
+                if (userDetails.isEnabled() && jwtUtil.validateToken(jwt, userDetails)) {
                     // Lấy userId từ token và lưu vào request attribute
                     Long userId = jwtUtil.extractUserId(jwt);
                     request.setAttribute("userId", userId);

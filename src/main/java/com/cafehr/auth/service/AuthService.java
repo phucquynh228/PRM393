@@ -60,6 +60,9 @@ public class AuthService {
     /** Shared session behavior for verified phone/password and Google identities. */
     @Transactional
     public LoginResponse createSession(User user, String incomingDeviceId) {
+        if (user.getEmploymentStatus() == com.cafehr.user.entity.EmploymentStatus.INACTIVE) {
+            throw new com.cafehr.common.exception.BusinessException("Tài khoản đã ngừng hoạt động");
+        }
 
         if (user.getDeviceId() == null || user.getDeviceId().isBlank()) {
             // Lần đầu đăng nhập -> Bind thiết bị

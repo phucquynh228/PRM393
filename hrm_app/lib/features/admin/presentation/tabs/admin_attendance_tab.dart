@@ -8,18 +8,27 @@ import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart
 class AdminAttendanceTab extends StatelessWidget {
   final List<dynamic> attendanceList;
   final Future<void> Function() onRefresh;
+  final VoidCallback? onExport;
   const AdminAttendanceTab({
     super.key,
     required this.attendanceList,
     required this.onRefresh,
+    this.onExport,
   });
   @override
   Widget build(BuildContext context) => DirectoryList(
     title: 'Chấm công toàn hệ thống',
+    action: onExport == null
+        ? null
+        : FilledButton.icon(
+            onPressed: onExport,
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Xuất báo cáo'),
+          ),
     initialDate: DateTime.now(),
     subtitle: 'Tra cứu lịch sử theo nhân viên, ngày và trạng thái',
     items: attendanceList,
-    searchFields: const ['userName', 'shiftName'],
+    searchFields: const ['userName', 'shiftName', 'storeName'],
     onRefresh: onRefresh,
     filterField: 'status',
     filterOptions: const {
@@ -30,6 +39,7 @@ class AdminAttendanceTab extends StatelessWidget {
     dateField: 'checkInTime',
     columns: const [
       'Nhân viên',
+      'Chi nhánh gốc',
       'Ca làm',
       'Ngày',
       'Vào ca',
@@ -38,6 +48,7 @@ class AdminAttendanceTab extends StatelessWidget {
     ],
     cells: (a) => [
       DataCell(Text(a['userName'] ?? '—')),
+      DataCell(Text(a['storeName'] ?? '—')),
       DataCell(Text(a['shiftName'] ?? '—')),
       DataCell(Text(BranchHelpers.formatIsoDate(a['checkInTime']))),
       DataCell(Text(BranchHelpers.clockTime(a['checkInTime']))),
@@ -60,6 +71,10 @@ class AdminAttendanceTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          if (a['storeName'] != null) ...[
+            Text('${a['storeName']}'),
+            const SizedBox(height: 8),
+          ],
           Text(
             '${a['shiftName'] ?? '—'} · ${BranchHelpers.formatIsoDate(a['checkInTime'])}',
           ),

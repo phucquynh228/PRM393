@@ -61,10 +61,14 @@ public class AttendanceService {
     @Transactional
     public AttendanceResponse checkIn(Long userId, CheckInRequest request) {
         // 1. Lấy user kèm store
-        User user = userRepository.findById(userId)
+        User user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new BusinessException("User không tồn tại"));
 
         Store store = user.getStore();
+        if (user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE
+                || store != null && store.getStatus() == com.cafehr.branch.entity.StoreStatus.CLOSED) {
+            throw new BusinessException("Tài khoản hoặc chi nhánh không thể chấm công");
+        }
         if (store == null) {
             throw new BusinessException("User chưa được gán vào cửa hàng nào");
         }
@@ -89,6 +93,11 @@ public class AttendanceService {
                     .orElseThrow(() -> new BusinessException("Bạn không có ca làm việc hôm nay"));
         }
 
+        Store scheduledStore = StaffViews.store(schedule);
+        if (scheduledStore == null || !scheduledStore.getId().equals(store.getId())) {
+            throw new BusinessException("Ca làm thuộc chi nhánh cũ; hãy liên hệ quản lý để phân ca mới");
+        }
+        store = scheduledStore;
         // 3. Kiểm tra đã check-in chưa
         boolean overnight = schedule.getDate().equals(LocalDate.now().minusDays(1))
                 && !schedule.getShift().getEndTime().isAfter(schedule.getShift().getStartTime())
@@ -240,6 +249,8 @@ public class AttendanceService {
                 .checkInLat(attendance.getCheckInLat())
                 .checkInLng(attendance.getCheckInLng())
                 .status(attendance.getSchedule().getStatus().name())
+                .storeId(StaffViews.store(attendance.getSchedule()) == null ? null : StaffViews.store(attendance.getSchedule()).getId())
+                .storeName((String) StaffViews.schedule(attendance.getSchedule()).get("storeName"))
                 .build();
     }
 }

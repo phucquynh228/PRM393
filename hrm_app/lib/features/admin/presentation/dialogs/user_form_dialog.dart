@@ -146,6 +146,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
               helperText: 'Nhân viên cần được phân vào một chi nhánh.',
             ),
             items: widget.stores
+                .where((s) => s['status'] == 'ACTIVE')
                 .map(
                   (s) => DropdownMenuItem<int>(
                     value: s['id'],

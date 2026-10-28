@@ -22,6 +22,11 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleDisabled(org.springframework.security.authentication.DisabledException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(buildErrorBody(HttpStatus.FORBIDDEN, "Tài khoản đã ngừng hoạt động"));
+    }
+
     @ExceptionHandler(GoogleAuthenticationException.class)
     public ResponseEntity<Map<String, Object>> handleGoogleAuthentication(GoogleAuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(buildErrorBody(HttpStatus.UNAUTHORIZED, ex.getMessage()));

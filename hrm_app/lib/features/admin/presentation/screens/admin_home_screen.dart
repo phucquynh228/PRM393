@@ -8,8 +8,11 @@ import 'package:hrm_app/features/auth/data/models/login_response.dart';
 import 'package:hrm_app/shared/data/remote/api_client.dart';
 import 'package:hrm_app/core/config/api_config.dart';
 import 'package:hrm_app/features/admin/presentation/cubit/admin_cubit.dart';
+import 'package:hrm_app/features/admin/data/attendance_report_exporter.dart';
+import 'package:hrm_app/features/admin/presentation/screens/attendance_report_screen.dart';
 import 'package:hrm_app/shared/presentation/widgets/app_shell.dart';
 import 'package:hrm_app/features/admin/presentation/dialogs/store_form_dialog.dart';
+import 'package:hrm_app/features/admin/presentation/dialogs/branch_closure_dialog.dart';
 import 'package:hrm_app/features/admin/presentation/dialogs/user_form_dialog.dart';
 import 'package:hrm_app/features/admin/presentation/tabs/admin_accounts_tab.dart';
 import 'package:hrm_app/features/admin/presentation/tabs/admin_attendance_tab.dart';
@@ -99,7 +102,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ) ??
       false;
   Future<void> _delete(int id, String name) async {
-    if (!await _confirm('Xóa chi nhánh?', 'Bạn muốn xóa chi nhánh $name?')) {
+    if (!await _confirm(
+      'Xóa vĩnh viễn chi nhánh trống?',
+      '$name chỉ được xóa khi chưa có nhân sự hoặc lịch sử. Xác nhận xóa?',
+    )) {
       return;
     }
     try {
@@ -107,6 +113,27 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       _message('Đã xóa chi nhánh.');
     } catch (e) {
       _message(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    }
+  }
+
+  Future<void> _placement({
+    Map<String, dynamic>? store,
+    Map<String, dynamic>? employee,
+  }) async {
+    final saved = await BranchClosureDialog.show(
+      context,
+      dio: _dio,
+      stores: _cubit.state.stores,
+      store: store,
+      employee: employee,
+    );
+    if (saved == true && mounted) {
+      await _cubit.load();
+      _message(
+        store == null
+            ? 'Đã cập nhật bố trí nhân sự.'
+            : 'Đã ngừng hoạt động chi nhánh và xử lý nhân sự.',
+      );
     }
   }
 
@@ -134,6 +161,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
+    );
+  }
+
+  Future<void> _exportAttendance() async {
+    final exporter = AttendanceReportExporter(_dio);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AttendanceReportScreen(
+          users: _cubit.state.users,
+          stores: _cubit.state.stores,
+          onLoad: exporter.loadSummary,
+          onExport: (request, format) =>
+              exporter.export(request, format: format),
+        ),
+      ),
     );
   }
 
@@ -180,16 +222,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   onAddStore: () => _store(),
                   onEditStore: (s) => _store(store: s),
                   onDeleteStore: _delete,
+                  onCloseStore: (s) => _placement(store: s),
                 ),
                 AdminAccountsTab(
                   users: state.users,
+                  stores: state.stores,
                   onRefresh: _cubit.load,
                   onAddUser: _user,
                   onResetDevice: _reset,
+                  onPlacement: (u) => _placement(employee: u),
                 ),
                 AdminAttendanceTab(
                   attendanceList: state.attendance,
                   onRefresh: _cubit.load,
+                  onExport: state.initialized ? _exportAttendance : null,
                 ),
                 AdminScheduleTab(dio: _dio, stores: state.stores),
               ],

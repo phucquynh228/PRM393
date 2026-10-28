@@ -22,4 +22,7 @@ public class StoreResponse {
     private String managerName;
     private String managerPhone;
     private long currentStaffCount;
+    private boolean canDelete;
+    private java.time.LocalDateTime closedAt;
+    private String closureReason;
 }

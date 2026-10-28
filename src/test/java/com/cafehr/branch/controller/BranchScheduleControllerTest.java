@@ -60,7 +60,7 @@ class BranchScheduleControllerTest {
     }
     @Test void invalidDraftPreventsPublishingEntireRange() {
         UserSchedule first = draft(1), second = draft(2);
-        when(scheduleRepository.findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(1L, day, day)).thenReturn(List.of(first, second));
+        when(scheduleRepository.findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(1L, day, day)).thenReturn(List.of(first, second));
         when(userRepository.findLockedById(3L)).thenReturn(Optional.of(staff));
         doNothing().when(scheduleRules).validate(first);
         doThrow(new BusinessException("Trùng giờ")).when(scheduleRules).validate(second);
@@ -70,7 +70,7 @@ class BranchScheduleControllerTest {
     }
     @Test void validRangePublishesAndNotifies() {
         UserSchedule first = draft(1);
-        when(scheduleRepository.findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(1L, day, day)).thenReturn(List.of(first));
+        when(scheduleRepository.findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(1L, day, day)).thenReturn(List.of(first));
         when(userRepository.findLockedById(3L)).thenReturn(Optional.of(staff));
         controller.publishRange(request, day, day);
         assertTrue(first.isPublished()); verify(staffNotifications).scheduleChanged(eq(first), anyString());

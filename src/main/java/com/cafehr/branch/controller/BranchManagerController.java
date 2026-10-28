@@ -58,12 +58,13 @@ public class BranchManagerController {
     private final StaffRequestService staffRequestService;
     private final StaffNotificationService staffNotifications;
     private final ScheduleRules scheduleRules;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @GetMapping("/branch")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBranch(HttpServletRequest request) {
         Store store = getManagerStore(request);
         List<Map<String, Object>> staff = userRepository.findByStoreId(store.getId()).stream()
-                .filter(user -> user.getRole() == Role.STAFF)
+                .filter(user -> user.getRole() == Role.STAFF && user.getEmploymentStatus() == com.cafehr.user.entity.EmploymentStatus.ACTIVE)
                 .sorted(Comparator.comparing(User::getName, String.CASE_INSENSITIVE_ORDER))
                 .map(this::staffResponse)
                 .toList();
@@ -97,7 +98,7 @@ public class BranchManagerController {
         Store store = getManagerStore(request);
         validateRange(from, to);
         List<Map<String, Object>> schedules = scheduleRepository
-                .findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), from, to)
+                .findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), from, to)
                 .stream().map(this::scheduleResponse).toList();
         return ResponseEntity.ok(ApiResponse.ok("Lịch phân ca", schedules));
     }
@@ -115,9 +116,6 @@ public class BranchManagerController {
         staffRequestService.assertNoLeave(staff.getId(), body.getDate());
         Shift shift = shiftRepository.findById(body.getShiftId())
                 .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
-        if (scheduleRepository.existsByUserIdAndDateAndShiftId(staff.getId(), body.getDate(), shift.getId())) {
-            throw new BusinessException("Nhân viên đã được phân ca này trong ngày đã chọn");
-        }
         UserSchedule schedule = UserSchedule.builder()
                 .user(staff)
                 .shift(shift)
@@ -140,8 +138,8 @@ public class BranchManagerController {
             @Valid @RequestBody ManagerScheduleRequest body) {
         Store store = getManagerStore(request);
         UserSchedule schedule = scheduleRepository.findById(id)
-                .filter(item -> item.getUser().getStore() != null
-                        && item.getUser().getStore().getId().equals(store.getId()))
+                .filter(item -> StaffViews.store(item) != null
+                        && StaffViews.store(item).getId().equals(store.getId()))
                 .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
         if (body.getDate().isBefore(LocalDate.now())) {
             throw new BusinessException("Không thể sửa lịch trong quá khứ");
@@ -155,13 +153,6 @@ public class BranchManagerController {
         staffRequestService.assertNoLeave(staff.getId(), body.getDate());
         Shift shift = shiftRepository.findById(body.getShiftId())
                 .orElseThrow(() -> new BusinessException("Không tìm thấy ca làm"));
-        boolean duplicate = scheduleRepository.existsByUserIdAndDateAndShiftId(
-                staff.getId(), body.getDate(), shift.getId());
-        if (duplicate && !(schedule.getUser().getId().equals(staff.getId())
-                && schedule.getDate().equals(body.getDate())
-                && schedule.getShift().getId().equals(shift.getId()))) {
-            throw new BusinessException("Nhân viên đã được phân ca này trong ngày đã chọn");
-        }
         if (schedule.isPublished() && !schedule.getUser().getId().equals(staff.getId())) {
             staffNotifications.scheduleChanged(schedule, "Ca làm của bạn đã được chuyển cho nhân viên khác");
         }
@@ -169,6 +160,7 @@ public class BranchManagerController {
             staffNotifications.scheduleChanged(schedule, "Ca làm tạm thu hồi để điều chỉnh");
         }
         schedule.setUser(staff);
+        if (!schedule.getShift().getId().equals(shift.getId())) schedule.setShiftSlot(null);
         schedule.setShift(shift);
         schedule.setDate(body.getDate());
         schedule.setPublished(body.isPublished());
@@ -185,8 +177,8 @@ public class BranchManagerController {
             @PathVariable Long id) {
         Store store = getManagerStore(request);
         UserSchedule schedule = scheduleRepository.findById(id)
-                .filter(item -> item.getUser().getStore() != null
-                        && item.getUser().getStore().getId().equals(store.getId()))
+                .filter(item -> StaffViews.store(item) != null
+                        && StaffViews.store(item).getId().equals(store.getId()))
                 .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
         if (schedule.getStatus() != ScheduleStatus.PENDING
                 || !StaffViews.start(schedule).isAfter(java.time.LocalDateTime.now())
@@ -194,7 +186,12 @@ public class BranchManagerController {
             throw new BusinessException("Không thể xóa ca đã bắt đầu chấm công");
         }
         staffNotifications.scheduleChanged(schedule, "Ca làm đã được quản lý hủy");
-        scheduleRepository.delete(schedule);
+        if (schedule.getShiftSlot() != null && !schedule.isPublished()) {
+            // Keep an explicit omission so generating this week again does not undo the manager's adjustment.
+            schedule.setStatus(ScheduleStatus.CANCELLED);
+        } else {
+            scheduleRepository.delete(schedule);
+        }
         return ResponseEntity.ok(ApiResponse.ok("Đã xóa lịch", null));
     }
 
@@ -205,8 +202,8 @@ public class BranchManagerController {
             @PathVariable Long id) {
         Store store = getManagerStore(request);
         UserSchedule schedule = scheduleRepository.findById(id)
-                .filter(item -> item.getUser().getStore() != null
-                        && item.getUser().getStore().getId().equals(store.getId()))
+                .filter(item -> StaffViews.store(item) != null
+                        && StaffViews.store(item).getId().equals(store.getId()))
                 .orElseThrow(() -> new BusinessException("Không tìm thấy lịch trong chi nhánh"));
         userRepository.findLockedById(schedule.getUser().getId()).orElseThrow();
         staffRequestService.assertNoLeave(schedule.getUser().getId(), schedule.getDate());
@@ -224,8 +221,8 @@ public class BranchManagerController {
         Store store = getManagerStore(request);
         validateRange(from, to);
         List<UserSchedule> drafts = scheduleRepository
-                .findByUserStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), from, to)
-                .stream().filter(s -> !s.isPublished()).toList();
+                .findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), from, to)
+                .stream().filter(s -> !s.isPublished() && s.getStatus() == ScheduleStatus.PENDING).toList();
         drafts.stream().map(s -> s.getUser().getId()).distinct().sorted()
                 .forEach(id -> userRepository.findLockedById(id).orElseThrow());
         for (UserSchedule schedule : drafts) {
@@ -265,6 +262,7 @@ public class BranchManagerController {
                 .role(Role.STAFF)
                 .store(store)
                 .build());
+        applyFixedRoster(staff, body);
         return ResponseEntity.ok(ApiResponse.ok("Đã tạo hồ sơ nhân viên", staffResponse(staff)));
     }
 
@@ -281,6 +279,7 @@ public class BranchManagerController {
             throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống");
         }
         staff.setName(body.getName().trim());
+        applyFixedRoster(staff, body);
         staff.setPhone(phone);
         if (body.getPassword() != null && !body.getPassword().isBlank()) {
             staff.setPassword(passwordEncoder.encode(body.getPassword()));
@@ -295,13 +294,13 @@ public class BranchManagerController {
             @RequestParam LocalDate date) {
         Store store = getManagerStore(request);
         List<Attendance> attendance = attendanceRepository
-                .findByUserStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
+                .findByScheduleStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
                         store.getId(), date.atStartOfDay(), date.plusDays(1).atStartOfDay());
         Map<Long, Attendance> bySchedule = attendance.stream().collect(
                 java.util.stream.Collectors.toMap(item -> item.getSchedule().getId(), item -> item));
         List<UserSchedule> schedules = scheduleRepository
-                .findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
-                        store.getId(), date, date);
+                .findByStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+                        store.getId(), date, date).stream().filter(s -> s.getStatus() != ScheduleStatus.CANCELLED).toList();
         List<Map<String, Object>> records = schedules.stream().map(schedule -> {
             Attendance record = bySchedule.get(schedule.getId());
             if (record != null) return attendanceResponse(record);
@@ -338,10 +337,10 @@ public class BranchManagerController {
         Store store = getManagerStore(request);
         validateRange(from, to);
         List<UserSchedule> schedules = scheduleRepository
-                .findByUserStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
-                        store.getId(), from, to);
+                .findByStoreIdAndDateBetweenAndPublishedTrueOrderByDateAscShiftStartTimeAsc(
+                        store.getId(), from, to).stream().filter(s -> s.getStatus() != ScheduleStatus.CANCELLED).toList();
         List<Attendance> attendance = attendanceRepository
-                .findByUserStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
+                .findByScheduleStoreIdAndCheckInTimeBetweenOrderByCheckInTimeDesc(
                         store.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay());
         long checkedOut = attendance.stream().filter(item -> item.getCheckOutTime() != null).count();
         long staffCount = userRepository.findByStoreId(store.getId()).stream()
@@ -386,7 +385,7 @@ public class BranchManagerController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getRequests(HttpServletRequest request) {
         Store store = getManagerStore(request);
         List<Map<String, Object>> items = branchRequestRepository
-                .findByUserStoreIdOrderByCreatedAtDesc(store.getId())
+                .findByStoreIdOrderByCreatedAtDesc(store.getId())
                 .stream().map(this::requestResponse).toList();
         return ResponseEntity.ok(ApiResponse.ok("Yêu cầu nhân viên", items));
     }
@@ -418,17 +417,22 @@ public class BranchManagerController {
         }
         User manager = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản quản lý"));
-        if (manager.getRole() != Role.MANAGER || manager.getStore() == null) {
+        if (manager.getRole() != Role.MANAGER || manager.getStore() == null
+                || manager.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE) {
             throw new BusinessException("Tài khoản chưa được gán vào chi nhánh quản lý");
         }
-        return storeRepository.findById(manager.getStore().getId())
+        boolean writing = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
+        Store store = (writing ? storeRepository.findLockedById(manager.getStore().getId()) : storeRepository.findById(manager.getStore().getId()))
                 .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh"));
+        if (writing) entityManager.refresh(store);
+        if (store.getStatus() == StoreStatus.CLOSED) throw new BusinessException("Chi nhánh đã ngừng hoạt động");
+        return store;
     }
 
     private User getStaffInStore(Long userId, Store store) {
         User user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new BusinessException("Không tìm thấy nhân viên"));
-        if (user.getRole() != Role.STAFF || user.getStore() == null
+        if (user.getRole() != Role.STAFF || user.getStore() == null || user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE
                 || !user.getStore().getId().equals(store.getId())) {
             throw new BusinessException("Nhân viên không thuộc chi nhánh của bạn");
         }
@@ -450,7 +454,16 @@ public class BranchManagerController {
         response.put("deviceId", user.getDeviceId());
         response.put("storeId", user.getStore() != null ? user.getStore().getId() : null);
         response.put("storeName", user.getStore() != null ? user.getStore().getName() : null);
+        response.put("fixedRoster", StaffViews.fixedRoster(user));
         return response;
+    }
+
+    private void applyFixedRoster(User staff, ManagerStaffRequest body) {
+        if (body.getFixedRoster() == null) return;
+        if (new java.util.HashSet<>(body.getFixedRoster()).size() != body.getFixedRoster().size()) {
+            throw new BusinessException("Ca mặc định bị trùng thứ và ca làm");
+        }
+        staff.getFixedRoster().clear(); staff.getFixedRoster().addAll(body.getFixedRoster());
     }
 
     private Map<String, Object> scheduleResponse(UserSchedule schedule) {

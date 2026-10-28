@@ -56,6 +56,12 @@ class ScheduleRulesTest {
         existing(leave);
         assertDoesNotThrow(() -> rules.validate(shift(1, day, 8, 16)));
     }
+    @Test void cancelledScheduleDoesNotBlockAssignment() {
+        UserSchedule cancelled = shift(2, day, 8, 16);
+        cancelled.setStatus(ScheduleStatus.CANCELLED);
+        existing(cancelled);
+        assertDoesNotThrow(() -> rules.validate(shift(1, day, 8, 16)));
+    }
     @Test void inactiveTemplateCannotBeAssignedOrPublished() {
         UserSchedule schedule = shift(1, day, 8, 16);
         schedule.getShift().setActive(false);

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:hrm_app/core/services/location_service.dart';
 import 'package:hrm_app/features/attendance/domain/repositories/attendance_repository.dart';
@@ -57,8 +58,10 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
 
   @override
   Future<void> checkIn(int? scheduleId) async {
-    // 1. Get GPS coordinates (Will throw if mocked/fake GPS)
-    final position = await locationService.getCurrentPosition();
+    // 1. Get GPS coordinates (Allow mock location in debug mode for emulator testing)
+    final position = await locationService.getCurrentPosition(
+      rejectMocked: !kDebugMode,
+    );
 
     // 2. Call API Check-in
     final request = CheckInRequest(

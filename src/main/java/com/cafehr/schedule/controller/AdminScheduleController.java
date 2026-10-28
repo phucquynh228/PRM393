@@ -72,7 +72,7 @@ public class AdminScheduleController {
             @RequestParam LocalDate to, @RequestParam(required = false) Long storeId) {
         if (from.isAfter(to) || from.plusMonths(3).isBefore(to)) throw new BusinessException("Chọn khoảng tối đa 3 tháng");
         return ApiResponse.ok("Lịch làm toàn chuỗi", schedules.findByDateBetweenOrderByDateAscShiftStartTimeAsc(from, to).stream()
-                .filter(s -> storeId == null || s.getUser().getStore() != null && storeId.equals(s.getUser().getStore().getId()))
+                .filter(s -> storeId == null || StaffViews.store(s) != null && storeId.equals(StaffViews.store(s).getId()))
                 .map(StaffViews::schedule).toList());
     }
 }

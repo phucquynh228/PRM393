@@ -36,6 +36,11 @@ public class User {
     @Column(nullable = false, length = 20)
     private Role role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 24, columnDefinition = "varchar(24) default 'ACTIVE'")
+    @Builder.Default
+    private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;
+
     /**
      * ID thiết bị được bind với tài khoản.
      * Null nếu chưa bind lần đầu.
@@ -60,15 +65,25 @@ public class User {
     @Column(length = 255)
     private String address;
 
+    @ElementCollection
+    @CollectionTable(name = "user_fixed_roster", joinColumns = @JoinColumn(name = "user_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "day_of_week", "slot"}))
+    @Builder.Default
+    private java.util.Set<com.cafehr.schedule.entity.FixedRosterEntry> fixedRoster = new java.util.HashSet<>();
+
     public User() {
+        this.fixedRoster = new java.util.HashSet<>();
+        this.employmentStatus = EmploymentStatus.ACTIVE;
     }
 
     public User(Long id, String name, String phone, String password, Role role, String deviceId, Store store) {
         this.id = id;
+        this.fixedRoster = new java.util.HashSet<>();
         this.name = name;
         this.phone = phone;
         this.password = password;
         this.role = role;
+        this.employmentStatus = EmploymentStatus.ACTIVE;
         this.deviceId = deviceId;
         this.store = store;
     }

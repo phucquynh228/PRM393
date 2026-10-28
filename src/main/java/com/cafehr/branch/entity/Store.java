@@ -15,6 +15,7 @@ import org.hibernate.annotations.Nationalized;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
 public class Store {
 
     @Id
@@ -55,6 +56,12 @@ public class Store {
     @Builder.Default
     private StoreStatus status = StoreStatus.ACTIVE;
 
+    private java.time.LocalDateTime closedAt;
+
+    @org.hibernate.annotations.Nationalized
+    @Column(length = 500)
+    private String closureReason;
+
     /**
      * Cửa hàng trưởng (Manager) duy nhất của chi nhánh.
      */
@@ -62,11 +69,20 @@ public class Store {
     @JoinColumn(name = "manager_id")
     private User manager;
 
+    @ElementCollection
+    @CollectionTable(name = "branch_shift_plans", joinColumns = @JoinColumn(name = "store_id"))
+    @MapKeyEnumerated(EnumType.STRING)
+    @MapKeyColumn(name = "slot", length = 20)
+    @Builder.Default
+    private java.util.Map<com.cafehr.schedule.entity.ShiftSlot, com.cafehr.schedule.entity.BranchShiftPlan> shiftPlans = new java.util.EnumMap<>(com.cafehr.schedule.entity.ShiftSlot.class);
+
     public Store() {
+        this.shiftPlans = new java.util.EnumMap<>(com.cafehr.schedule.entity.ShiftSlot.class);
     }
 
     public Store(Long id, String code, String name, Double latitude, Double longitude, Integer allowedRadius, Integer maxStaff, StoreStatus status, User manager) {
         this.id = id;
+        this.shiftPlans = new java.util.EnumMap<>(com.cafehr.schedule.entity.ShiftSlot.class);
         this.code = code;
         this.name = name;
         this.latitude = latitude;

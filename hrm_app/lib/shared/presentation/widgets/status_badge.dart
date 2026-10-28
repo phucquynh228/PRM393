@@ -41,6 +41,11 @@ class StatusBadge extends StatelessWidget {
       'MAINTENANCE' => ('Bảo trì', BadgeVariant.warning, Icons.build_outlined),
       'REJECTED' => ('Từ chối', BadgeVariant.error, Icons.cancel_outlined),
       'CANCELLED' => ('Đã hủy', BadgeVariant.neutral, Icons.cancel_outlined),
+      'WAITING_TRANSFER' => (
+        'Chờ điều chuyển',
+        BadgeVariant.warning,
+        Icons.person_search_outlined,
+      ),
       'ON_LEAVE' => (
         'Nghỉ phép',
         BadgeVariant.info,

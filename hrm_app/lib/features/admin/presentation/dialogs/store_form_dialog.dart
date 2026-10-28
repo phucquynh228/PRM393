@@ -199,10 +199,17 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
             initialValue: _status,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Trạng thái'),
-            items: const [
-              DropdownMenuItem(value: 'ACTIVE', child: Text('Hoạt động')),
-              DropdownMenuItem(value: 'MAINTENANCE', child: Text('Bảo trì')),
-              DropdownMenuItem(value: 'CLOSED', child: Text('Ngừng hoạt động')),
+            items: [
+              const DropdownMenuItem(value: 'ACTIVE', child: Text('Hoạt động')),
+              const DropdownMenuItem(
+                value: 'MAINTENANCE',
+                child: Text('Bảo trì'),
+              ),
+              if (widget.store?['status'] == 'CLOSED')
+                const DropdownMenuItem(
+                  value: 'CLOSED',
+                  child: Text('Ngừng hoạt động'),
+                ),
             ],
             onChanged: _saving
                 ? null
@@ -219,7 +226,12 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
                 child: Text('Chưa bổ nhiệm'),
               ),
               ...widget.users
-                  .where((u) => u['role'] == 'MANAGER' || u['id'] == _manager)
+                  .where(
+                    (u) =>
+                        u['role'] != 'ADMIN' &&
+                            (u['employmentStatus'] ?? 'ACTIVE') == 'ACTIVE' ||
+                        u['id'] == _manager,
+                  )
                   .map(
                     (u) => DropdownMenuItem<int>(
                       value: u['id'],

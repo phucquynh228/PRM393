@@ -35,8 +35,13 @@ public class StaffRequestService {
 
     @Transactional
     public Map<String, Object> create(Long userId, BranchRequestCreate body) {
+        users.findLockedById(userId).orElseThrow(() -> new BusinessException("Không tìm thấy nhân viên"));
         User user = workspace.staff(userId);
         if (user.getStore() == null) throw new BusinessException("Tài khoản chưa được gán vào chi nhánh");
+        if (user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE
+                || user.getStore().getStatus() == com.cafehr.branch.entity.StoreStatus.CLOSED) {
+            throw new BusinessException("Tài khoản hoặc chi nhánh không ở trạng thái hoạt động");
+        }
         String reason = body.getReason().trim();
         if (reason.isEmpty() || reason.length() > 1000) throw new BusinessException("Lý do cần từ 1 đến 1000 ký tự");
         BranchRequest item = BranchRequest.builder().user(user).type(body.getType())
@@ -54,6 +59,9 @@ public class StaffRequestService {
             item.setEndDate(target.getDate());
         } else if (body.getType() == BranchRequestType.ATTENDANCE_CORRECTION) {
             UserSchedule source = ownedSchedule(body.getSourceScheduleId(), userId);
+            if (store(source) == null || !store(source).getId().equals(user.getStore().getId())) {
+                throw new BusinessException("Ca làm thuộc chi nhánh cũ; không gửi sửa công cho quản lý chi nhánh mới");
+            }
             validateCorrection(source, body.getRequestedCheckIn(), body.getRequestedCheckOut());
             item.setSourceScheduleId(source.getId());
             item.setSourceShiftId(source.getShift().getId());
@@ -92,10 +100,15 @@ public class StaffRequestService {
             throw new BusinessException("Vui lòng nhập lý do từ chối");
         }
         BranchRequest item = lockedRequest(id);
-        if (item.getUser().getStore() == null || !item.getUser().getStore().getId().equals(storeId)) {
+        com.cafehr.branch.entity.Store origin = item.getStore() != null ? item.getStore() : item.getUser().getStore();
+        if (origin == null || !origin.getId().equals(storeId)) {
             throw new BusinessException("Không tìm thấy yêu cầu trong chi nhánh");
         }
         if (item.getStatus() != BranchRequestStatus.PENDING) throw new BusinessException("Yêu cầu này đã được xử lý");
+        if (item.getUser().getStore() == null || !item.getUser().getStore().getId().equals(storeId)
+                || item.getUser().getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE) {
+            throw new BusinessException("Nhân viên đã điều chuyển hoặc ngừng làm việc; yêu cầu không còn áp dụng");
+        }
         if (status == BranchRequestStatus.APPROVED) {
             switch (item.getType()) {
                 case LEAVE, UNPAID_LEAVE -> approveLeave(item);
@@ -151,6 +164,10 @@ public class StaffRequestService {
             throw new BusinessException("Chỉ đổi với ca của nhân viên khác trong cùng chi nhánh");
         }
         for (UserSchedule shift : List.of(source, target)) {
+            if (store(shift) == null || !store(shift).getId().equals(user.getStore().getId())
+                    || shift.getUser().getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.ACTIVE) {
+                throw new BusinessException("Ca làm không còn thuộc chi nhánh đang quản lý");
+            }
             if (!shift.isPublished() || shift.getStatus() != ScheduleStatus.PENDING || !start(shift).isAfter(LocalDateTime.now())
                     || attendance.findByScheduleId(shift.getId()).isPresent()) {
                 throw new BusinessException("Chỉ đổi ca đã công bố, chưa bắt đầu và chưa chấm công");
@@ -165,7 +182,7 @@ public class StaffRequestService {
     private void assertNoOverlap(Long userId, UserSchedule incoming, Long removed) {
         boolean overlap = schedules.findByUserIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(
                 userId, incoming.getDate().minusDays(1), incoming.getDate().plusDays(1)).stream()
-                .filter(s -> !s.getId().equals(removed) && s.getStatus() != ScheduleStatus.ON_LEAVE)
+                .filter(s -> !s.getId().equals(removed) && s.getStatus() != ScheduleStatus.ON_LEAVE && s.getStatus() != ScheduleStatus.CANCELLED)
                 .anyMatch(s -> start(s).isBefore(end(incoming)) && start(incoming).isBefore(end(s)));
         if (overlap) throw new BusinessException("Đổi ca sẽ gây trùng lịch làm việc");
     }
@@ -197,7 +214,7 @@ public class StaffRequestService {
     private void validateCorrection(UserSchedule source, LocalDateTime checkIn, LocalDateTime checkOut) {
         LocalDate today = LocalDate.now();
         if (!source.isPublished() || source.getDate().isBefore(today.minusDays(30)) || source.getDate().isAfter(today)
-                || source.getStatus() == ScheduleStatus.ON_LEAVE) {
+                || source.getStatus() == ScheduleStatus.ON_LEAVE || source.getStatus() == ScheduleStatus.CANCELLED) {
             throw new BusinessException("Chỉ sửa công cho ca đã công bố trong 30 ngày gần đây và không phải ca nghỉ phép");
         }
         if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)

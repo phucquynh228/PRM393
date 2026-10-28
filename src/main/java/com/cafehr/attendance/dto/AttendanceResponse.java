@@ -26,4 +26,6 @@ public class AttendanceResponse {
     private Double checkInLat;
     private Double checkInLng;
     private String status;
+    private Long storeId;
+    private String storeName;
 }

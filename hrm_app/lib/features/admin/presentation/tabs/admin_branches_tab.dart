@@ -10,6 +10,7 @@ class AdminBranchesTab extends StatelessWidget {
   final VoidCallback onAddStore;
   final void Function(Map<String, dynamic>) onEditStore;
   final void Function(int, String) onDeleteStore;
+  final ValueChanged<Map<String, dynamic>>? onCloseStore;
   const AdminBranchesTab({
     super.key,
     required this.stores,
@@ -17,15 +18,31 @@ class AdminBranchesTab extends StatelessWidget {
     required this.onAddStore,
     required this.onEditStore,
     required this.onDeleteStore,
+    this.onCloseStore,
   });
   Widget _actions(Map<String, dynamic> store) => PopupMenuButton<String>(
     tooltip: 'Thao tác chi nhánh',
-    onSelected: (value) => value == 'edit'
-        ? onEditStore(store)
-        : onDeleteStore(store['id'], store['name'] ?? ''),
-    itemBuilder: (_) => const [
-      PopupMenuItem(value: 'edit', child: Text('Chỉnh sửa')),
-      PopupMenuItem(value: 'delete', child: Text('Xóa chi nhánh')),
+    onSelected: (value) {
+      if (value == 'edit') {
+        onEditStore(store);
+      } else if (value == 'close') {
+        onCloseStore?.call(store);
+      } else {
+        onDeleteStore(store['id'], store['name'] ?? '');
+      }
+    },
+    itemBuilder: (_) => [
+      const PopupMenuItem(value: 'edit', child: Text('Chỉnh sửa')),
+      if (store['status'] != 'CLOSED' && onCloseStore != null)
+        const PopupMenuItem(
+          value: 'close',
+          child: Text('Ngừng hoạt động và xử lý nhân sự'),
+        ),
+      if (store['canDelete'] == true)
+        const PopupMenuItem(
+          value: 'delete',
+          child: Text('Xóa vĩnh viễn chi nhánh trống'),
+        ),
     ],
   );
   @override
