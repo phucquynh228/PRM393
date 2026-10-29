@@ -6,7 +6,10 @@ import 'package:hrm_app/core/config/api_config.dart';
 import 'package:hrm_app/shared/presentation/widgets/adaptive_form.dart';
 import 'package:hrm_app/shared/presentation/widgets/content_widgets.dart';
 import 'package:hrm_app/shared/presentation/widgets/empty_state_view.dart';
-import 'package:hrm_app/shared/presentation/widgets/status_badge.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/schedule_week_strip.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/schedule_roster_block.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
+import 'package:hrm_app/features/admin/presentation/dialogs/shift_transfer_dialog.dart';
 import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart';
 import 'package:hrm_app/features/staff/presentation/helpers/staff_helpers.dart';
 
@@ -19,14 +22,24 @@ class AdminScheduleTab extends StatefulWidget {
 }
 
 class _AdminScheduleTabState extends State<AdminScheduleTab> {
-  List<Map<String, dynamic>> _shifts = [], _schedules = [];
+  List<Map<String, dynamic>> _shifts = [], _schedules = [], _settings = [];
   DateTime _anchor = DateUtils.dateOnly(DateTime.now());
+  DateTime? _day = DateUtils.dateOnly(DateTime.now());
+  String _period = 'Week', _filter = 'ALL';
   int? _store;
   bool _loading = true, _templates = false;
   String? _error;
   int _version = 0;
-  DateTime get _from => _anchor.subtract(Duration(days: _anchor.weekday - 1));
-  DateTime get _to => _from.add(const Duration(days: 6));
+  DateTime get _from => _period == 'Day'
+      ? _anchor
+      : _period == 'Month'
+      ? DateTime(_anchor.year, _anchor.month, 1)
+      : _anchor.subtract(Duration(days: _anchor.weekday - 1));
+  DateTime get _to => _period == 'Day'
+      ? _anchor
+      : _period == 'Month'
+      ? DateTime(_anchor.year, _anchor.month + 1, 0)
+      : _from.add(const Duration(days: 6));
 
   @override
   void initState() {
@@ -71,6 +84,11 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
             if (_store != null) 'storeId': _store,
           },
         ),
+        _call(
+          'GET',
+          'roster/settings',
+          query: {if (_store != null) 'storeId': _store},
+        ),
       ]);
       if (!mounted || version != _version) return;
       setState(() {
@@ -78,6 +96,9 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
         _schedules = (data[1] as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        _settings = (data[2] as List)
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
       });
@@ -108,6 +129,316 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
     if (saved == true && mounted) await _load();
   }
 
+  void _changeDate(DateTime date) {
+    setState(() {
+      _anchor = DateUtils.dateOnly(date);
+      _day = _anchor;
+    });
+    _load();
+  }
+
+  void _move(int direction) => _changeDate(
+    _period == 'Month'
+        ? DateTime(_anchor.year, _anchor.month + direction, 1)
+        : _anchor.add(Duration(days: direction * (_period == 'Day' ? 1 : 7))),
+  );
+
+  Future<void> _transfer(Map<String, dynamic> item) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ShiftTransferDialog(
+        schedule: item,
+        stores: widget.stores
+            .where((s) => s['id'] != item['storeId'] && s['status'] != 'CLOSED')
+            .map((s) => Map<String, dynamic>.from(s as Map))
+            .toList(),
+        onSave: (target) async {
+          await _call(
+            'PUT',
+            'schedules/${item['id']}/transfer',
+            data: {'sourceStoreId': item['storeId'], 'targetStoreId': target},
+          );
+        },
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Đã điều chuyển ca làm.')));
+      await _load();
+    }
+  }
+
+  bool _canTransfer(Map<String, dynamic> item) {
+    final starts = DateTime.tryParse(
+      '${item['startsAt'] ?? '${item['date']}T${item['startTime']}'}',
+    );
+    return !_loading &&
+        item['status'] == 'PENDING' &&
+        item['storeId'] != null &&
+        starts != null &&
+        starts.isAfter(DateTime.now()) &&
+        widget.stores.any(
+          (s) => s['id'] == item['storeId'] && s['status'] != 'CLOSED',
+        ) &&
+        widget.stores.any(
+          (s) => s['id'] != item['storeId'] && s['status'] != 'CLOSED',
+        );
+  }
+
+  List<Map<String, dynamic>> _plans(dynamic storeId) {
+    final settings = _settings
+        .where((s) => s['storeId'] == storeId)
+        .firstOrNull;
+    final plans = (settings?['plans'] as List? ?? []).whereType<Map>();
+    return [
+      for (final slot in rosterSlots.keys)
+        Map<String, dynamic>.from(
+          plans.where((p) => p['slot'] == slot).firstOrNull ??
+              (() {
+                final shift = _shifts
+                    .where(
+                      (s) => s['active'] != false && scheduleSlot(s) == slot,
+                    )
+                    .firstOrNull;
+                return {
+                  'slot': slot,
+                  'shiftId': shift?['id'],
+                  'shiftName': shift?['name'],
+                  'startTime': shift?['startTime'],
+                  'endTime': shift?['endTime'],
+                  'active': shift != null,
+                  'requiredStaff': 0,
+                };
+              })(),
+        ),
+    ];
+  }
+
+  Widget _branchDay(DateTime day, Map<String, dynamic> branch) {
+    final plans = _plans(branch['id']);
+    Widget block(Map<String, dynamic> plan) => ScheduleRosterBlock(
+      plan: plan,
+      filter: _filter,
+      assignments: _schedules
+          .where(
+            (s) =>
+                s['date'] == BranchHelpers.dateToYmd(day) &&
+                s['storeId'] == branch['id'] &&
+                scheduleSlot(s) == plan['slot'] &&
+                s['status'] != 'CANCELLED',
+          )
+          .toList(),
+      action: (item) => _canTransfer(item)
+          ? IconButton(
+              tooltip: 'Điều chuyển ca',
+              icon: const Icon(Icons.swap_horiz),
+              onPressed: () => _transfer(item),
+            )
+          : null,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${branch['name']}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, box) => box.maxWidth >= 1000
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < plans.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        Expanded(child: block(plans[i])),
+                      ],
+                    ],
+                  )
+                : Column(
+                    children: [
+                      for (final plan in plans)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: block(plan),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _calendar() {
+    final counts = <String, int>{};
+    for (final row in _schedules.where((s) => s['status'] != 'CANCELLED')) {
+      counts['${row['date']}'] = (counts['${row['date']}'] ?? 0) + 1;
+    }
+    final branches = <Map<String, dynamic>>[
+      for (final store in widget.stores)
+        if ((_store == null || store['id'] == _store) &&
+            (store['status'] != 'CLOSED' ||
+                _schedules.any((s) => s['storeId'] == store['id'])))
+          Map<String, dynamic>.from(store as Map),
+      if (_schedules.any((s) => s['storeId'] == null))
+        {'id': null, 'name': 'Chưa có chi nhánh'},
+    ];
+    final days = _period == 'Week' && _day != null
+        ? [_day!]
+        : List.generate(
+            _to.difference(_from).inDays + 1,
+            (i) => _from.add(Duration(days: i)),
+          );
+    return [
+      DropdownButtonFormField<int>(
+        initialValue: _store ?? 0,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Chi nhánh'),
+        items: [
+          const DropdownMenuItem(value: 0, child: Text('Tất cả chi nhánh')),
+          ...widget.stores.map(
+            (s) => DropdownMenuItem<int>(
+              value: s['id'] as int,
+              child: Text('${s['name']}', overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ],
+        onChanged: _loading
+            ? null
+            : (v) {
+                setState(() => _store = v == 0 ? null : v);
+                _load();
+              },
+      ),
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'Day', label: Text('Ngày')),
+              ButtonSegment(value: 'Week', label: Text('Tuần')),
+              ButtonSegment(value: 'Month', label: Text('Tháng')),
+            ],
+            selected: {_period},
+            onSelectionChanged: _loading
+                ? null
+                : (v) {
+                    setState(() {
+                      _period = v.first;
+                      _day = _anchor;
+                    });
+                    _load();
+                  },
+          ),
+          TextButton(
+            onPressed: _loading ? null : () => _changeDate(DateTime.now()),
+            child: const Text('Hôm nay'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          IconButton(
+            tooltip: 'Kỳ trước',
+            onPressed: _loading ? null : () => _move(-1),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Expanded(
+            child: TextButton(
+              onPressed: _loading
+                  ? null
+                  : () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _anchor,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100, 12, 31),
+                      );
+                      if (date != null && mounted) _changeDate(date);
+                    },
+              child: Text(
+                '${BranchHelpers.shortDate(_from)} – ${BranchHelpers.prettyDate(_to)}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Kỳ sau',
+            onPressed: _loading ? null : () => _move(1),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+      if (_period == 'Week') ...[
+        ScheduleWeekStrip(
+          from: _from,
+          selected: _day,
+          counts: counts,
+          onSelected: (day) => setState(() {
+            _day = day;
+            _anchor = day;
+          }),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() => _day = null),
+            child: const Text('Xem cả tuần'),
+          ),
+        ),
+      ],
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final entry in {
+            'ALL': 'Tất cả',
+            'DRAFT': 'Bản nháp',
+            'PUBLISHED': 'Đã công bố',
+          }.entries)
+            ChoiceChip(
+              label: Text(entry.value),
+              selected: _filter == entry.key,
+              onSelected: (_) => setState(() => _filter = entry.key),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'Định mức tính cả nháp và lịch đã công bố; không tính nghỉ phép, vắng mặt hoặc ca đã hủy.',
+        style: TextStyle(fontSize: 12),
+      ),
+      const SizedBox(height: 12),
+      const InlineNotice(
+        'Bấm biểu tượng ⇄ cạnh nhân viên để chuyển ca sang chi nhánh khác. Giữ nguyên ngày, giờ và chi nhánh chính của nhân viên.',
+      ),
+      const SizedBox(height: 16),
+      if (_schedules.isEmpty && !_loading)
+        const EmptyStateView(
+          icon: Icons.event_note_outlined,
+          title: 'Chưa có lịch trong kỳ',
+          message: 'Manager của chi nhánh sẽ tạo và công bố lịch.',
+        ),
+      if (!_loading)
+        for (final day in days) ...[
+          Text(
+            BranchHelpers.prettyDate(day),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          for (final branch in branches) _branchDay(day, branch),
+        ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) => RefreshIndicator(
     onRefresh: _load,
@@ -117,7 +448,7 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
       children: [
         PageHeading(
           title: 'Lịch làm toàn chuỗi',
-          subtitle: 'Cấu hình mẫu ca và theo dõi lịch tại các chi nhánh',
+          subtitle: 'Theo dõi nhân sự theo ca và điều chuyển giữa các chi nhánh',
           action: _templates
               ? FilledButton.icon(
                   onPressed: _loading ? null : () => _edit(),
@@ -198,111 +529,8 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
                 ),
               ),
             ),
-        ] else ...[
-          DropdownButtonFormField<int>(
-            initialValue: _store ?? 0,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Chi nhánh'),
-            items: [
-              const DropdownMenuItem(value: 0, child: Text('Tất cả chi nhánh')),
-              ...widget.stores.map(
-                (s) => DropdownMenuItem<int>(
-                  value: s['id'] as int,
-                  child: Text('${s['name']}'),
-                ),
-              ),
-            ],
-            onChanged: _loading
-                ? null
-                : (v) {
-                    setState(() => _store = v == 0 ? null : v);
-                    _load();
-                  },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'Tuần trước',
-                onPressed: _loading
-                    ? null
-                    : () {
-                        setState(
-                          () => _anchor = _anchor.subtract(
-                            const Duration(days: 7),
-                          ),
-                        );
-                        _load();
-                      },
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Expanded(
-                child: Text(
-                  '${BranchHelpers.shortDate(_from)} – ${BranchHelpers.prettyDate(_to)}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Tuần sau',
-                onPressed: _loading
-                    ? null
-                    : () {
-                        setState(
-                          () => _anchor = _anchor.add(const Duration(days: 7)),
-                        );
-                        _load();
-                      },
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: _loading
-                  ? null
-                  : () {
-                      setState(
-                        () => _anchor = DateUtils.dateOnly(DateTime.now()),
-                      );
-                      _load();
-                    },
-              child: const Text('Tuần hiện tại'),
-            ),
-          ),
-          if (_schedules.isEmpty && !_loading)
-            const EmptyStateView(
-              icon: Icons.event_note_outlined,
-              title: 'Chưa có lịch trong tuần',
-              message: 'Manager của chi nhánh sẽ tạo và công bố lịch.',
-            ),
-          for (final s in _schedules)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: SurfaceCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${s['storeName'] ?? 'Chưa có chi nhánh'} · ${BranchHelpers.formatIsoDate(s['date'])}',
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${s['userName']} · ${s['shiftName']}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(
-                      '${shortTime(s['startTime'])} – ${shortTime(s['endTime'])}',
-                    ),
-                    const SizedBox(height: 10),
-                    StatusBadge.fromStatus(
-                      s['published'] == true ? 'PUBLISHED' : 'DRAFT',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+        ] else
+          ..._calendar(),
       ],
     ),
   );

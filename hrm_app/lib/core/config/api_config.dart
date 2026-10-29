@@ -19,7 +19,9 @@ Future<String> determineBaseUrl() async {
         const Duration(milliseconds: 500),
       );
       if (androidInfo.isPhysicalDevice) {
-        return 'http://10.33.75.228:8080/api'; // Host PC Wi-Fi IP for physical device
+        // USB development: adb -s <serial> reverse tcp:8080 tcp:8080.
+        // For Wi-Fi or a deployed server, override API_BASE_URL explicitly.
+        return 'http://127.0.0.1:8080/api';
       }
     } catch (_) {}
   }

@@ -63,6 +63,11 @@ public class UserSchedule {
     @Column(length = 20)
     private ShiftSlot shiftSlot;
 
+    /** Explicit admin authorization to work this assignment away from the home branch. */
+    @Column(nullable = false, columnDefinition = "bit default 0")
+    @Builder.Default
+    private boolean temporaryTransfer = false;
+
     @Column(nullable = false, columnDefinition = "bit default 1")
     @Builder.Default
     private boolean published = true;

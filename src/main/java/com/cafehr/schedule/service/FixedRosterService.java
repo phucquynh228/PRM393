@@ -30,6 +30,14 @@ public class FixedRosterService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> settings(Long managerId) { return views(scope(managerId, false)); }
 
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> adminSettings(Long storeId) {
+        var branches = storeId == null ? stores.findAll() : List.of(stores.findById(storeId)
+                .orElseThrow(() -> new BusinessException("Không tìm thấy chi nhánh")));
+        return branches.stream().sorted(Comparator.comparing(Store::getId))
+                .map(s -> StaffViews.row("storeId", s.getId(), "storeName", s.getName(), "plans", views(s))).toList();
+    }
+
     @Transactional
     public List<Map<String, Object>> saveSettings(Long managerId, RosterRequests.Settings body) {
         Store store = scope(managerId, true);

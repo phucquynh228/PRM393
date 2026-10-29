@@ -58,6 +58,7 @@ public final class StaffViews {
                 "storeName", schedule.getStoreName() != null ? schedule.getStoreName() : store == null ? null : store.getName(),
                 "storeCode", schedule.getStoreCode() != null ? schedule.getStoreCode() : store == null ? null : store.getCode(),
                 "storeId", store == null ? null : store.getId(), "published", schedule.isPublished(),
+                "temporaryTransfer", schedule.isTemporaryTransfer(),
                 "breakMinutes", schedule.getShift().getBreakMinutes(), "slot", slot(schedule).name());
     }
 

@@ -36,6 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @EnabledIfSystemProperty(named = "roster.integration", matches = "true")
 class FixedRosterIntegrationTest {
     @Autowired FixedRosterService roster;
+    @Autowired AdminRosterService transfers;
+    @Autowired com.cafehr.attendance.service.AttendanceService attendanceService;
     @Autowired BranchManagerController controller;
     @Autowired UserRepository users;
     @Autowired StoreRepository stores;
@@ -150,5 +152,44 @@ class FixedRosterIntegrationTest {
         mvc.perform(post("/api/manager/schedules/batch").with(user("admin").roles("ADMIN"))
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test void adminTransferMovesDraftBetweenBranchViewsAndReceivingManagerCanPublish() throws Exception {
+        roster.assign(manager.getId(), new RosterRequests.Batch(monday, ShiftSlot.MORNING, List.of(staff.getId())));
+        var assignment = week().get(0);
+        mvc.perform(put("/api/admin/schedules/" + assignment.getId() + "/transfer").with(user("admin").roles("ADMIN"))
+                        .contentType("application/json").content("{\"sourceStoreId\":" + store.getId() + ",\"targetStoreId\":" + other.getId() + "}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.storeId").value(other.getId()))
+                .andExpect(jsonPath("$.data.published").value(false)).andExpect(jsonPath("$.data.temporaryTransfer").value(true));
+        em.flush(); em.clear();
+        assertTrue(week().isEmpty());
+        var received = schedules.findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(other.getId(), monday, monday.plusDays(6));
+        assertEquals(1, received.size()); assertEquals(store.getId(), users.findById(staff.getId()).orElseThrow().getStore().getId());
+        var receivingManager = member("RM" + UUID.randomUUID().toString().substring(0, 8), Role.MANAGER, other);
+        mvc.perform(post("/api/manager/schedules/" + assignment.getId() + "/publish").with(user("receiver").roles("MANAGER"))
+                        .requestAttr("userId", receivingManager.getId()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.published").value(true));
+        assertEquals(1, notifications.findTop100ByUserIdOrderByCreatedAtDescIdDesc(staff.getId()).size());
+        mvc.perform(get("/api/admin/roster/settings").with(user("admin").roles("ADMIN")).param("storeId", store.getId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].plans[2].requiredStaff").value(4));
+        mvc.perform(put("/api/admin/schedules/" + assignment.getId() + "/transfer").with(user("manager").roles("MANAGER"))
+                        .contentType("application/json").content("{\"sourceStoreId\":" + other.getId() + ",\"targetStoreId\":" + store.getId() + "}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test void transferredShiftChecksGpsAtReceivingBranchAndNormalForeignShiftIsRejected() {
+        other.setLatitude(11.0); other.setLongitude(107.0); stores.flush();
+        var assignment = schedules.saveAndFlush(UserSchedule.builder().user(staff).store(other)
+                .temporaryTransfer(true).shift(morning).date(LocalDate.now()).status(ScheduleStatus.PENDING).build());
+        var body = new com.cafehr.attendance.dto.CheckInRequest();
+        body.setScheduleId(assignment.getId()); body.setLat(store.getLatitude()); body.setLng(store.getLongitude());
+        assertThrows(com.cafehr.common.exception.OutOfRangeException.class, () -> attendanceService.checkIn(staff.getId(), body));
+        body.setLat(other.getLatitude()); body.setLng(other.getLongitude());
+        assignment.setTemporaryTransfer(false);
+        assertThrows(BusinessException.class, () -> attendanceService.checkIn(staff.getId(), body));
+        assignment.setTemporaryTransfer(true);
+        var checkedIn = attendanceService.checkIn(staff.getId(), body);
+        assertEquals(other.getId(), checkedIn.getStoreId());
+        assertEquals(store.getId(), staff.getStore().getId());
     }
 }

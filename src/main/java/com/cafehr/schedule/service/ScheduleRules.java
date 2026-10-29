@@ -26,7 +26,8 @@ public class ScheduleRules {
             throw new BusinessException("Nhân viên chưa ở trạng thái đang làm việc");
         }
         if (StaffViews.store(schedule) != null && (StaffViews.store(schedule).getStatus() == com.cafehr.branch.entity.StoreStatus.CLOSED
-                || schedule.getUser().getStore() == null || !schedule.getUser().getStore().getId().equals(StaffViews.store(schedule).getId()))) {
+                || schedule.getUser().getStore() == null || !schedule.isTemporaryTransfer()
+                && !schedule.getUser().getStore().getId().equals(StaffViews.store(schedule).getId()))) {
             throw new BusinessException("Chi nhánh đã đóng hoặc nhân viên đã được điều chuyển");
         }
         if (schedule.getStatus() != ScheduleStatus.PENDING

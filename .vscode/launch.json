@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HRM: Android selected device",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/hrm_app",
+      "program": "lib/main.dart",
+      "preLaunchTask": "HRM: Prepare Android",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://127.0.0.1:8080/api"]
+    },
+    {
+      "name": "HRM: Emulator",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/hrm_app",
+      "program": "lib/main.dart",
+      "deviceId": "emulator-5554",
+      "preLaunchTask": "HRM: Prepare Emulator",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://127.0.0.1:8080/api"]
+    },
+    {
+      "name": "HRM: Samsung USB",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/hrm_app",
+      "program": "lib/main.dart",
+      "deviceId": "RFCX40BJXGX",
+      "preLaunchTask": "HRM: Prepare USB",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://127.0.0.1:8080/api"]
+    },
+    {
+      "name": "HRM: Emulator (compound)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/hrm_app",
+      "program": "lib/main.dart",
+      "deviceId": "emulator-5554",
+      "presentation": {"hidden": true},
+      "toolArgs": ["--dart-define=API_BASE_URL=http://127.0.0.1:8080/api"]
+    },
+    {
+      "name": "HRM: Samsung USB (compound)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/hrm_app",
+      "program": "lib/main.dart",
+      "deviceId": "RFCX40BJXGX",
+      "presentation": {"hidden": true},
+      "toolArgs": ["--dart-define=API_BASE_URL=http://127.0.0.1:8080/api"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "HRM: Emulator + Samsung USB",
+      "configurations": ["HRM: Emulator (compound)", "HRM: Samsung USB (compound)"],
+      "preLaunchTask": "HRM: Prepare Android",
+      "stopAll": true
+    }
+  ]
+}

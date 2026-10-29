@@ -94,7 +94,8 @@ public class AttendanceService {
         }
 
         Store scheduledStore = StaffViews.store(schedule);
-        if (scheduledStore == null || !scheduledStore.getId().equals(store.getId())) {
+        if (scheduledStore == null || scheduledStore.getStatus() == com.cafehr.branch.entity.StoreStatus.CLOSED
+                || !schedule.isTemporaryTransfer() && !scheduledStore.getId().equals(store.getId())) {
             throw new BusinessException("Ca làm thuộc chi nhánh cũ; hãy liên hệ quản lý để phân ca mới");
         }
         store = scheduledStore;

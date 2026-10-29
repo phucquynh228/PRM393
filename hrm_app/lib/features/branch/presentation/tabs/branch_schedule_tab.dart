@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:hrm_app/core/theme/app_theme.dart';
 import 'package:hrm_app/shared/presentation/widgets/content_widgets.dart';
-import 'package:hrm_app/shared/presentation/widgets/status_badge.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/schedule_roster_block.dart';
 import 'package:hrm_app/features/schedule/presentation/widgets/schedule_week_strip.dart';
 import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
 import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart';
@@ -60,23 +59,12 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
   bool _working = false;
   bool get _blocked => _working || !widget.dataReady;
   final Set<int> _busy = {};
-  static String _slot(Map<String, dynamic> row) {
-    if (rosterSlots.containsKey(row['slot'])) return row['slot'] as String;
-    final hour =
-        int.tryParse('${row['startTime'] ?? '0'}'.split(':').first) ?? 0;
-    return hour < 12
-        ? 'MORNING'
-        : hour < 17
-        ? 'AFTERNOON'
-        : 'EVENING';
-  }
-
   List<Map<String, dynamic>> get _plans => [
     for (final slot in rosterSlots.keys)
       widget.plans.where((p) => p['slot'] == slot).firstOrNull ??
           (() {
             final shift = widget.shifts
-                .where((s) => s['active'] != false && _slot(s) == slot)
+                .where((s) => s['active'] != false && scheduleSlot(s) == slot)
                 .firstOrNull;
             return <String, dynamic>{
               'slot': slot,
@@ -298,24 +286,8 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
         .where(
           (s) =>
               s['date'] == BranchHelpers.dateToYmd(date) &&
-              _slot(s) == slot &&
+              scheduleSlot(s) == slot &&
               s['status'] != 'CANCELLED',
-        )
-        .toList();
-    final available = assignments
-        .where((s) => s['status'] != 'ON_LEAVE' && s['status'] != 'ABSENT')
-        .map((s) => s['userId'])
-        .toSet()
-        .length;
-    final required = (plan['requiredStaff'] as num?)?.toInt() ?? 0;
-    final shortage = required > available;
-    final visible = assignments
-        .where(
-          (s) =>
-              _filter == 'ALL' ||
-              (_filter == 'DRAFT'
-                  ? s['published'] != true
-                  : s['published'] == true),
         )
         .toList();
     final starts = DateTime.tryParse(
@@ -327,122 +299,31 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
         plan['active'] == true &&
         starts != null &&
         starts.isAfter(DateTime.now());
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: shortage ? AppColors.errorBg : AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: shortage ? AppColors.error : AppColors.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            rosterSlots[slot]!,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            plan['shiftId'] == null
-                ? 'Chưa chọn mẫu giờ'
-                : '${plan['shiftName']} · ${plan['startTime']}–${plan['endTime']}',
-          ),
-          const SizedBox(height: 10),
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              required == 0
-                  ? '$available nhân viên · Chưa đặt định mức'
-                  : shortage
-                  ? 'Thiếu ${required - available} người · $available/$required nhân viên'
-                  : 'Đủ nhân sự · $available/$required nhân viên',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: shortage
-                    ? AppColors.error
-                    : required > 0
-                    ? AppColors.success
-                    : AppColors.textSecondary,
-              ),
-            ),
-          ),
-          if (plan['shiftId'] != null && plan['active'] != true) ...[
-            const SizedBox(height: 8),
-            const Text('Mẫu ca đã ngừng dùng. Chọn lại trong Định mức ca.'),
-          ],
-          const SizedBox(height: 12),
-          if (visible.isEmpty)
-            Text(
-              assignments.isEmpty
-                  ? 'Chưa có nhân sự trong ca.'
-                  : 'Không có phân công phù hợp bộ lọc.',
-            ),
-          for (final item in visible)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['userName'] ?? 'Nhân viên',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${item['shiftName']} · ${item['startTime']}–${item['endTime']}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            StatusBadge.fromStatus(
-                              item['published'] == true ? 'PUBLISHED' : 'DRAFT',
-                            ),
-                            if (item['status'] != 'PENDING')
-                              StatusBadge.fromStatus(item['status']),
-                          ],
-                        ),
-                      ],
-                    ),
+    return ScheduleRosterBlock(
+      plan: plan,
+      assignments: assignments,
+      filter: _filter,
+      action: (item) => _future(item)
+          ? PopupMenuButton<String>(
+              tooltip: 'Thao tác ca làm',
+              enabled: !_blocked && !_busy.contains(item['id']),
+              onSelected: (action) => _action(action, item),
+              itemBuilder: (_) => [
+                if (item['published'] != true)
+                  const PopupMenuItem(
+                    value: 'publish',
+                    child: Text('Công bố ca'),
                   ),
-                  if (_future(item))
-                    PopupMenuButton<String>(
-                      tooltip: 'Thao tác ca làm',
-                      enabled: !_blocked && !_busy.contains(item['id']),
-                      onSelected: (action) => _action(action, item),
-                      itemBuilder: (_) => [
-                        if (item['published'] != true)
-                          const PopupMenuItem(
-                            value: 'publish',
-                            child: Text('Công bố ca'),
-                          ),
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Text('Chỉnh sửa'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Xóa ca'),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          OutlinedButton.icon(
-            onPressed: canAdd ? () => _add(date, plan, assignments) : null,
-            icon: const Icon(Icons.group_add_outlined),
-            label: const Text('Thêm nhân sự'),
-          ),
-        ],
+                if (widget.staff.any((s) => s['id'] == item['userId']))
+                  const PopupMenuItem(value: 'edit', child: Text('Chỉnh sửa')),
+                const PopupMenuItem(value: 'delete', child: Text('Xóa ca')),
+              ],
+            )
+          : null,
+      footer: OutlinedButton.icon(
+        onPressed: canAdd ? () => _add(date, plan, assignments) : null,
+        icon: const Icon(Icons.group_add_outlined),
+        label: const Text('Thêm nhân sự'),
       ),
     );
   }

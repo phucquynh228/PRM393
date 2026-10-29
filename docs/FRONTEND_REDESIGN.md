@@ -37,14 +37,15 @@ flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080/api
 ```
 
-Android emulator dùng http://10.0.2.2:8080/api. Với điện thoại thật, truyền địa chỉ LAN của máy chạy Spring Boot:
+Android emulator mặc định dùng http://10.0.2.2:8080/api. Điện thoại USB dùng http://127.0.0.1:8080/api qua `adb reverse`; xem [thiết lập emulator và USB](ANDROID_DEV_SETUP.md).
+Nếu chạy điện thoại qua Wi-Fi, truyền địa chỉ LAN của máy chạy Spring Boot:
 
 ```powershell
 flutter run --dart-define=API_BASE_URL=http://YOUR_PC_IP:8080/api
 flutter build apk --debug --dart-define=API_BASE_URL=http://YOUR_PC_IP:8080/api
 ```
 
-API_BASE_URL nhận qua dart-define. Cấu hình dự phòng địa chỉ thiết bị thật của dự án được giữ trong core/config/api_config.dart. APK mặc định dùng cấu hình này.
+API_BASE_URL nhận qua dart-define. Không còn IP Wi-Fi cố định trong code; APK mặc định trên điện thoại thật cần kết nối USB đã cấu hình reverse hoặc API_BASE_URL phù hợp.
 
 ## Kiểm tra
 

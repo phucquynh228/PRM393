@@ -1,4 +1,7 @@
 -- Upgrade existing databases without removing staff, schedules or attendance.
+IF OBJECT_ID(N'dbo.user_schedules') IS NOT NULL AND COL_LENGTH(N'dbo.user_schedules', N'temporary_transfer') IS NULL
+    ALTER TABLE dbo.user_schedules ADD temporary_transfer BIT NOT NULL CONSTRAINT df_schedule_temporary_transfer DEFAULT 0 WITH VALUES;
+
 IF OBJECT_ID(N'dbo.users') IS NOT NULL AND COL_LENGTH(N'dbo.users', N'employment_status') IS NULL
     ALTER TABLE dbo.users ADD employment_status VARCHAR(24) NOT NULL CONSTRAINT df_users_employment_status DEFAULT 'ACTIVE' WITH VALUES;
 

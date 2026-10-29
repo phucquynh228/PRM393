@@ -160,6 +160,7 @@ public class BranchManagerController {
             staffNotifications.scheduleChanged(schedule, "Ca làm tạm thu hồi để điều chỉnh");
         }
         schedule.setUser(staff);
+        schedule.setTemporaryTransfer(false);
         if (!schedule.getShift().getId().equals(shift.getId())) schedule.setShiftSlot(null);
         schedule.setShift(shift);
         schedule.setDate(body.getDate());
