@@ -4,7 +4,9 @@ target/
 
 # IDE & Editor files
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 *.iml
 *.ipr
 *.iws

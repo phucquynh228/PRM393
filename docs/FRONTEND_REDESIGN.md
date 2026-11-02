@@ -20,13 +20,13 @@ Giao diện Flutter ưu tiên điện thoại, nền sáng và màu nâu cà ph�
 
 - lib/core/theme/app_theme.dart: màu, typography và theme thành phần.
 - lib/core/network/api_error.dart: thông báo lỗi API phù hợp người dùng.
-- lib/presentation/widgets/app_shell.dart: navigation dưới 760 logical pixels; navigation rail từ 760; sidebar mở rộng từ 1150.
-- lib/presentation/widgets/content_widgets.dart: card, heading, metric grid co giãn với nội dung.
-- lib/presentation/widgets/directory_list.dart: tìm kiếm, lọc và bảng phân trang từ 900 logical pixels.
-- lib/presentation/widgets/adaptive_form.dart: form thích ứng theo kích thước màn hình.
-- lib/presentation/blocs/admin và branch: Cubit quản lý tải dữ liệu và lỗi.
-- lib/presentation/screens/employee: danh sách yêu cầu và form gửi đơn.
-- lib/data/models/attendance_record.dart: model bản ghi chấm công.
+- lib/shared/presentation/widgets/app_shell.dart: navigation dưới 760 logical pixels; navigation rail từ 760; sidebar mở rộng từ 1150.
+- lib/shared/presentation/widgets/content_widgets.dart: card, heading, metric grid co giãn với nội dung.
+- lib/shared/presentation/widgets/directory_list.dart: tìm kiếm, lọc và bảng phân trang từ 900 logical pixels.
+- lib/shared/presentation/widgets/adaptive_form.dart: form thích ứng theo kích thước màn hình.
+- lib/features/admin/presentation/cubit và lib/features/branch/presentation/cubit: Cubit quản lý tải dữ liệu và lỗi.
+- lib/features/staff/presentation: danh sách yêu cầu và form gửi đơn.
+- lib/features/attendance/data/models/attendance_record.dart: model bản ghi chấm công.
 
 ## Chạy ứng dụng
 
@@ -37,14 +37,15 @@ flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080/api
 ```
 
-Android emulator dùng http://10.0.2.2:8080/api. Với điện thoại thật, truyền địa chỉ LAN của máy chạy Spring Boot:
+Android emulator mặc định dùng http://10.0.2.2:8080/api. Điện thoại USB dùng http://127.0.0.1:8080/api qua `adb reverse`; xem [thiết lập emulator và USB](ANDROID_DEV_SETUP.md).
+Nếu chạy điện thoại qua Wi-Fi, truyền địa chỉ LAN của máy chạy Spring Boot:
 
 ```powershell
 flutter run --dart-define=API_BASE_URL=http://YOUR_PC_IP:8080/api
 flutter build apk --debug --dart-define=API_BASE_URL=http://YOUR_PC_IP:8080/api
 ```
 
-API_BASE_URL nhận qua dart-define. Cấu hình dự phòng địa chỉ thiết bị thật của dự án được giữ trong main.dart. APK mặc định dùng cấu hình này.
+API_BASE_URL nhận qua dart-define. Không còn IP Wi-Fi cố định trong code; APK mặc định trên điện thoại thật cần kết nối USB đã cấu hình reverse hoặc API_BASE_URL phù hợp.
 
 ## Kiểm tra
 
@@ -72,7 +73,7 @@ Chưa có thiết bị Android kết nối trong phiên thực hiện. Kiểm th
 
 ## Phạm vi mở rộng cần API
 
-- Lịch tuần cho nhân viên: backend hiện chỉ cung cấp lịch hôm nay cho vai trò này.
+- Lịch tuần/tháng cho nhân viên và các chức năng Staff đầy đủ đã được bổ sung; xem [STAFF_FEATURES.md](STAFF_FEATURES.md).
 - Khoảng cách và trạng thái trong/ngoài vùng trước check-in: cần dữ liệu vị trí chi nhánh cho nhân viên.
 - Chọn nhiều ngôn ngữ: hiện giao diện tiếng Việt; chưa có màn chọn ngôn ngữ hay bộ bản dịch tiếng Anh.
 

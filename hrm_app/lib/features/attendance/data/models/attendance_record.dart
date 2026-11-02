@@ -1,15 +1,12 @@
 class AttendanceRecord {
   final int id, scheduleId;
   final String shiftName, status;
-  final String? shiftStartTime, shiftEndTime;
   final DateTime? checkInTime, checkOutTime;
   const AttendanceRecord({
     required this.id,
     required this.scheduleId,
     required this.shiftName,
     required this.status,
-    this.shiftStartTime,
-    this.shiftEndTime,
     this.checkInTime,
     this.checkOutTime,
   });
@@ -19,8 +16,6 @@ class AttendanceRecord {
         scheduleId: (json['scheduleId'] as num).toInt(),
         shiftName: json['shiftName']?.toString() ?? 'Ca làm',
         status: json['status']?.toString() ?? 'UNKNOWN',
-        shiftStartTime: json['shiftStartTime']?.toString(),
-        shiftEndTime: json['shiftEndTime']?.toString(),
         checkInTime: DateTime.tryParse(json['checkInTime']?.toString() ?? ''),
         checkOutTime: DateTime.tryParse(json['checkOutTime']?.toString() ?? ''),
       );

@@ -1,7 +1,7 @@
 package com.cafehr.security;
 
-import com.cafehr.entity.User;
-import com.cafehr.repository.UserRepository;
+import com.cafehr.user.entity.User;
+import com.cafehr.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,6 +29,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         return new org.springframework.security.core.userdetails.User(
                 user.getPhone(),
                 user.getPassword(),
+                user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.INACTIVE,
+                true, true, true,
                 Collections.singletonList(
                         new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
                 )
