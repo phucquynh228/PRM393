@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class LocationService {
-  Future<Position> getCurrentPosition() async {
+  Future<Position> getCurrentPosition({bool rejectMocked = true}) async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('Dịch vụ vị trí đang tắt. Vui lòng bật GPS.');
     }
@@ -11,7 +11,9 @@ class LocationService {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied) {
-      throw Exception('Chưa có quyền vị trí. Vui lòng cho phép để chấm công.');
+      throw Exception(
+        'Chưa có quyền vị trí. Vui lòng cấp quyền để lấy tọa độ.',
+      );
     }
     if (permission == LocationPermission.deniedForever) {
       throw Exception(
@@ -23,7 +25,7 @@ class LocationService {
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
       );
-      if (!kIsWeb && position.isMocked) {
+      if (rejectMocked && !kIsWeb && position.isMocked) {
         throw Exception(
           'Phát hiện vị trí giả lập. Vui lòng tắt ứng dụng giả GPS.',
         );
