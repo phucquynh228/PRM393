@@ -95,6 +95,12 @@ public class FixedRosterService {
                 .map(User::getId).sorted().toList();
         // Branch lock serializes generation/batch and branch lifecycle changes. User locks also coordinate leave approval.
         var staff = staffIds.stream().map(id -> staff(id, store)).toList();
+        if (staff.isEmpty()) {
+            throw new BusinessException("Chi nhánh chưa có nhân viên đang làm việc. Hãy thêm nhân viên trong Đội ngũ trước khi tạo nháp tuần.");
+        }
+        if (staff.stream().allMatch(user -> user.getFixedRoster().isEmpty())) {
+            throw new BusinessException("Chưa thiết lập ca làm việc mặc định cho nhân viên. Vào Đội ngũ → Chỉnh sửa nhân viên → Ca làm việc mặc định, chọn ca theo thứ và lưu trước khi tạo nháp tuần.");
+        }
         for (User user : staff) {
             var preferences = user.getFixedRoster().stream().sorted(Comparator.comparingInt(FixedRosterEntry::getDayOfWeek)
                     .thenComparing(FixedRosterEntry::getSlot)).toList();

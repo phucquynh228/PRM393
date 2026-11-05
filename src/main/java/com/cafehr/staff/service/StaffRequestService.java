@@ -231,7 +231,9 @@ public class StaffRequestService {
         boolean overlap = attendance.findByUserIdOrderByCheckInTimeDesc(item.getUser().getId()).stream()
                 .filter(a -> !a.getSchedule().getId().equals(source.getId()))
                 .anyMatch(a -> a.getCheckInTime().isBefore(item.getRequestedCheckOut())
-                        && (a.getCheckOutTime() == null || a.getCheckOutTime().isAfter(item.getRequestedCheckIn())));
+                        && (a.getCheckOutTime() == null
+                            ? com.cafehr.attendance.service.AttendanceTiming.deadline(a)
+                            : a.getCheckOutTime()).isAfter(item.getRequestedCheckIn()));
         if (overlap) throw new BusinessException("Giờ đề xuất trùng với bản ghi chấm công khác");
         Attendance record = attendance.findByScheduleId(source.getId()).orElseGet(() -> Attendance.builder()
                 .user(item.getUser()).schedule(source).build());

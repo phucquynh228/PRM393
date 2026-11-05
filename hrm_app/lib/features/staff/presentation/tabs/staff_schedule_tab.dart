@@ -11,7 +11,7 @@ import 'package:hrm_app/features/staff/presentation/widgets/staff_shift_card.dar
 class StaffScheduleTab extends StatefulWidget {
   final StaffState state;
   final Future<void> Function() refresh;
-  final void Function({DateTime? anchor, bool? month}) change;
+  final void Function({DateTime? anchor}) change;
   final ValueChanged<StaffItem> details, swap;
   final VoidCallback? request;
   const StaffScheduleTab({
@@ -35,8 +35,7 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
   @override
   void didUpdateWidget(covariant StaffScheduleTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.state.from != state.from ||
-        oldWidget.state.month != state.month) {
+    if (oldWidget.state.from != state.from) {
       _selected = null;
     }
   }
@@ -46,11 +45,8 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
       (DateTime.tryParse('${item['startsAt']}')?.isAfter(DateTime.now()) ??
           false);
 
-  void move(int direction) => widget.change(
-    anchor: state.month
-        ? DateTime(state.anchor.year, state.anchor.month + direction, 1)
-        : state.anchor.add(Duration(days: direction * 7)),
-  );
+  void move(int direction) =>
+      widget.change(anchor: state.anchor.add(Duration(days: direction * 7)));
 
   @override
   Widget build(BuildContext context) {
@@ -90,16 +86,6 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
             runSpacing: 12,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Tuần')),
-                  ButtonSegment(value: true, label: Text('Tháng')),
-                ],
-                selected: {state.month},
-                onSelectionChanged: state.busy
-                    ? null
-                    : (v) => widget.change(month: v.first),
-              ),
               OutlinedButton.icon(
                 onPressed: state.busy
                     ? null
@@ -146,7 +132,7 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
             ),
           ),
           const SizedBox(height: 20),
-          if (!state.month) ...[
+          ...[
             ScheduleWeekStrip(
               from: state.from,
               selected: _selected,
@@ -165,7 +151,7 @@ class _StaffScheduleTabState extends State<StaffScheduleTab> {
             const EmptyStateView(
               icon: Icons.calendar_month_outlined,
               title: 'Chưa có lịch trong khoảng này',
-              message: 'Chọn tuần/tháng khác hoặc chờ quản lý công bố lịch.',
+              message: 'Chọn tuần khác hoặc chờ quản lý công bố lịch.',
             ),
           for (final day in days) ...[
             Padding(

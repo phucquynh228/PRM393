@@ -131,7 +131,8 @@ class _StaffFormState extends State<_StaffForm> {
         data: {
           'name': _name.text.trim(),
           'phone': _phone.text.trim(),
-          if (_password.text.isNotEmpty) 'password': _password.text,
+          if (widget.staff == null && _password.text.isNotEmpty)
+            'password': _password.text,
           'fixedRoster': rosterEntries(_fixedRoster),
         },
       );
@@ -189,21 +190,19 @@ class _StaffFormState extends State<_StaffForm> {
                 : null,
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _password,
-            enabled: !_saving,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: widget.staff == null
-                  ? 'Mật khẩu'
-                  : 'Mật khẩu mới (không bắt buộc)',
+          if (widget.staff == null)
+            TextFormField(
+              controller: _password,
+              enabled: !_saving,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu ban đầu'),
+              validator: (s) =>
+                  (s?.length ?? 0) < 6 ? 'Mật khẩu tối thiểu 6 ký tự' : null,
+            )
+          else
+            const InlineNotice(
+              'Nhân viên tự đổi mật khẩu trong Profile. Nếu quên mật khẩu, nhân viên gửi yêu cầu Admin hỗ trợ.',
             ),
-            validator: (s) =>
-                (widget.staff == null || (s?.isNotEmpty ?? false)) &&
-                    (s?.length ?? 0) < 6
-                ? 'Mật khẩu tối thiểu 6 ký tự'
-                : null,
-          ),
           const SizedBox(height: 24),
           FixedRosterEditor(
             selected: _fixedRoster,

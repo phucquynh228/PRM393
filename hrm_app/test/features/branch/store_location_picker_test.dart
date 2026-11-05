@@ -119,6 +119,107 @@ Widget form(
 );
 
 void main() {
+  testWidgets(
+    'manager selector only contains active members of the edited branch',
+    (tester) async {
+      await mount(
+        tester,
+        StoreFormDialog(
+          store: {...store(), 'id': 10, 'managerId': 2},
+          users: const [
+            {
+              'id': 1,
+              'name': 'Nhân viên tại chỗ',
+              'role': 'STAFF',
+              'storeId': 10,
+              'employmentStatus': 'ACTIVE',
+            },
+            {
+              'id': 2,
+              'name': 'Manager hiện tại',
+              'role': 'MANAGER',
+              'storeId': 10,
+              'employmentStatus': 'ACTIVE',
+            },
+            {
+              'id': 3,
+              'name': 'Nhân viên nơi khác',
+              'role': 'STAFF',
+              'storeId': 20,
+              'employmentStatus': 'ACTIVE',
+            },
+            {'id': 4, 'name': 'Admin', 'role': 'ADMIN', 'storeId': 10},
+            {
+              'id': 5,
+              'name': 'Đã nghỉ',
+              'role': 'STAFF',
+              'storeId': 10,
+              'employmentStatus': 'INACTIVE',
+            },
+            {
+              'id': 6,
+              'name': 'Chưa phân chi nhánh',
+              'role': 'STAFF',
+              'storeId': null,
+            },
+          ],
+          locationService: PickerLocationService(),
+          mapTileProvider: MemoryTiles(),
+          onSubmit: (_) async {},
+          showSnackBar: (_, {isError = false}) {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      final selector = find.byType(DropdownButtonFormField<int>);
+      await tester.ensureVisible(selector);
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      expect(find.text('Nhân viên tại chỗ'), findsOneWidget);
+      expect(find.text('Manager hiện tại'), findsWidgets);
+      for (final excluded in [
+        'Nhân viên nơi khác',
+        'Admin',
+        'Đã nghỉ',
+        'Chưa phân chi nhánh',
+      ]) {
+        expect(find.text(excluded), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'new branch cannot select manager before having its own employees',
+    (tester) async {
+      await mount(
+        tester,
+        StoreFormDialog(
+          users: const [
+            {
+              'id': 1,
+              'name': 'Nhân viên nơi khác',
+              'role': 'STAFF',
+              'storeId': 10,
+            },
+          ],
+          locationService: PickerLocationService(),
+          mapTileProvider: MemoryTiles(),
+          onSubmit: (_) async {},
+          showSnackBar: (_, {isError = false}) {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dropdown = find.byType(DropdownButtonFormField<int>);
+      final button = find.descendant(
+        of: dropdown,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<int>,
+        ),
+      );
+      expect(tester.widget<DropdownButton<int>>(button).onChanged, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
   setUpAll(() async {
     await (FontLoader(
       'HRMSans',

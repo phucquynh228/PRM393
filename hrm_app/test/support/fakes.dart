@@ -23,7 +23,7 @@ class FakeAttendanceRepository implements AttendanceRepository {
       scheduleId: 7,
       shiftName: 'Ca sáng',
       status: 'CHECKED_IN',
-      checkInTime: DateTime(2026, 10, 20, 7),
+      checkInTime: DateTime.now().subtract(const Duration(hours: 1)),
     ),
   ];
   final checkoutCalls = <int>[];

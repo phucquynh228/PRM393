@@ -3,13 +3,11 @@ package com.cafehr.security;
 import com.cafehr.user.entity.User;
 import com.cafehr.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 
 /**
  * UserDetailsService implementation — load user từ DB bằng phone number.
@@ -26,14 +24,6 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Không tìm thấy user với số điện thoại: " + phone));
 
-        return new org.springframework.security.core.userdetails.User(
-                user.getPhone(),
-                user.getPassword(),
-                user.getEmploymentStatus() != com.cafehr.user.entity.EmploymentStatus.INACTIVE,
-                true, true, true,
-                Collections.singletonList(
-                        new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
-                )
-        );
+        return new HrmUserDetails(user);
     }
 }

@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrm_app/features/auth/data/models/login_response.dart';
 import 'package:hrm_app/core/config/api_config.dart';
 import 'package:hrm_app/features/branch/presentation/cubit/branch_cubit.dart';
+import 'package:hrm_app/features/branch/presentation/screens/manager_profile_screen.dart';
 import 'package:hrm_app/shared/presentation/widgets/app_shell.dart';
 import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart';
 import 'package:hrm_app/features/branch/presentation/tabs/branch_overview_tab.dart';
@@ -38,14 +39,9 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
   DateTime _reportTo = DateUtils.dateOnly(DateTime.now());
   DateTime get _from => _period == 'Day'
       ? _scheduleDate
-      : _period == 'Month'
-      ? DateTime(_scheduleDate.year, _scheduleDate.month, 1)
       : _scheduleDate.subtract(Duration(days: _scheduleDate.weekday - 1));
-  DateTime get _to => _period == 'Day'
-      ? _scheduleDate
-      : _period == 'Month'
-      ? DateTime(_scheduleDate.year, _scheduleDate.month + 1, 0)
-      : _from.add(const Duration(days: 6));
+  DateTime get _to =>
+      _period == 'Day' ? _scheduleDate : _from.add(const Duration(days: 6));
   @override
   void initState() {
     super.initState();
@@ -194,6 +190,16 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
     await _report();
   }
 
+  void _openProfile() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => ManagerProfileScreen(
+        loginResponse: widget.loginResponse,
+        cubit: _cubit,
+        onLogout: _logout,
+      ),
+    ),
+  );
+
   Future<void> _logout() async {
     final yes = await showDialog<bool>(
       context: context,
@@ -240,10 +246,13 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
                 .map((e) => Map<String, dynamic>.from(e))
                 .toList()
           : <Map<String, dynamic>>[];
+      final profile = state.resources['profile'];
+      final name = profile is Map
+          ? profile['name']?.toString() ?? widget.loginResponse.name
+          : widget.loginResponse.name;
       return AppShell(
         title: state.branch['name']?.toString() ?? 'Quản lý chi nhánh',
-        subtitle:
-            '${state.branch['code'] ?? 'HRM Cafe'} · ${widget.loginResponse.name}',
+        subtitle: '${state.branch['code'] ?? 'HRM Cafe'} · $name',
         selectedIndex: _index,
         onDestinationSelected: _navigate,
         destinations: [
@@ -259,6 +268,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
           const AppDestination('Báo cáo', Icons.insights_outlined),
         ],
         onRefresh: () => _reload(),
+        onProfile: _openProfile,
         onLogout: _logout,
         refreshing: state.loading.isNotEmpty,
         error:
@@ -272,7 +282,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
           index: _index,
           children: [
             BranchOverviewTab(
-              name: widget.loginResponse.name,
+              name: name,
               state: state,
               onRefresh: _reload,
               onNavigate: _navigate,
@@ -283,6 +293,7 @@ class _BranchManagerScreenState extends State<BranchManagerScreen> {
             ),
 
             BranchScheduleTab(
+              onConfigureDefaults: () => _navigate(4),
               dataReady:
                   state.resources.containsKey('rosterSettings') &&
                   !['branch', 'shifts', 'schedules', 'rosterSettings'].any(

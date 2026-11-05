@@ -7,7 +7,7 @@ Tài khoản mẫu: `0901000003` / `123456` (nếu chưa đổi mật khẩu).
 
 1. **Trang chủ**: ca hôm nay, chi nhánh, trạng thái ca, check-in/check-out, tổng giờ thực tế và giờ được phân công của tuần hiện tại, thông báo và yêu cầu gần đây.
 2. **Chấm công**: vào/ra ca bằng API hiện có, lịch sử, khoảng ngày, bộ lọc đi muộn/về sớm/chưa ra ca, thời lượng thực tế và yêu cầu sửa công.
-3. **Lịch làm**: xem theo tuần hoặc tháng, chọn ngày trên thanh thứ Hai–Chủ nhật, xem số ca mỗi ngày hoặc cả tuần. Ca sắp tới hiển thị trước; thẻ ca có giờ, chi nhánh, thời gian nghỉ và ghi chú qua đêm. Xem chi tiết, đề nghị đổi ca hoặc dùng nút cuối danh sách để gửi yêu cầu đổi ca/xin nghỉ. Chỉ lịch đã công bố mới xuất hiện.
+3. **Lịch làm**: xem theo tuần, chọn ngày trên thanh thứ Hai–Chủ nhật, xem số ca mỗi ngày hoặc cả tuần. Ca sắp tới hiển thị trước; thẻ ca có giờ, chi nhánh, thời gian nghỉ và ghi chú qua đêm. Xem chi tiết, đề nghị đổi ca hoặc dùng nút cuối danh sách để gửi yêu cầu đổi ca/xin nghỉ. Chỉ lịch đã công bố mới xuất hiện.
 4. **Yêu cầu**: nghỉ phép, nghỉ không lương, đổi ca, điều chỉnh chấm công; lọc theo loại/trạng thái; xem ghi chú quản lý và hủy đơn còn hợp lệ.
 5. **Thông báo**: phân công/thay đổi/hủy lịch, nhắc giờ vào ca, kết quả duyệt đơn và thông báo từ quản lý; đánh dấu đã đọc từng thông báo hoặc tất cả.
 6. **Hồ sơ**: mã nhân viên dạng `NV-xxxx`, tên, số điện thoại, chức vụ, chi nhánh, email, liên hệ khẩn cấp, địa chỉ; cập nhật thông tin cá nhân, đổi mật khẩu và đăng xuất.
@@ -19,6 +19,7 @@ Tài khoản mẫu: `0901000003` / `123456` (nếu chưa đổi mật khẩu).
 - Chi nhánh ngừng hoạt động dùng luồng Admin xử lý nhân sự. Nhân viên có thể được điều chuyển, chờ điều chuyển hoặc ngừng làm việc. Ca sắp tới cũ được hủy; lịch sử giữ chi nhánh gốc. Xem [quy trình chi tiết](BRANCH_LIFECYCLE.md).
 
 - Giờ công tuần tính từ thứ Hai, chỉ cộng khoảng thời gian đã check-out, cắt đúng ranh giới tuần kể cả ca qua nửa đêm. Giờ đang làm chưa được cộng vào tổng đã hoàn tất.
+- Check-out được phép tối đa **24 giờ từ lúc check-in**, gồm ca qua đêm; quá hạn phải gửi yêu cầu sửa công để quản lý duyệt. Bản ghi đã đóng có thời lượng vượt 24 giờ hoặc giờ ra không sau giờ vào được đánh dấu **Cần sửa công** và không cộng giờ trong lịch sử, tổng tuần hoặc báo cáo CSV/XLSX/PDF. Giữ nguyên dữ liệu gốc để đối chiếu; sau khi quản lý duyệt giờ hợp lệ, giờ công được tính lại. Ca cũ quá hạn không xuất hiện như ca đang làm hôm nay.
 - Đi muộn/về sớm so sánh giờ thực tế với giờ bắt đầu/kết thúc ca, hiển thị theo phút nguyên. Hiện chưa áp dụng thời gian ân hạn.
 - Check-in xác thực vị trí bằng GPS với phạm vi chi nhánh, chỉ áp dụng ca hôm nay hoặc ca đêm hôm trước còn hiệu lực. Không thể check-in ca đã nghỉ phép/đã chấm công.
 - Mỗi đơn nghỉ tối đa 31 ngày, không gửi cho ca đã bắt đầu hoặc đã chấm công. Khi duyệt, các ca đã công bố trong khoảng nghỉ chuyển sang `ON_LEAVE`; quản lý không thể phân/công bố ca mới vào ngày đã duyệt nghỉ.
@@ -35,7 +36,7 @@ Tài khoản mẫu: `0901000003` / `123456` (nếu chưa đổi mật khẩu).
 
 - **Admin → Lịch làm → Lịch chi nhánh**: xem lịch nháp và đã công bố của toàn chuỗi theo tuần, lọc chi nhánh. Không trực tiếp phân công nhân viên.
 - **Admin → Lịch làm → Mẫu ca**: tạo/sửa tên, giờ bắt đầu/kết thúc, số phút nghỉ; bật/tắt cho phép sử dụng. Mẫu dùng chung toàn chuỗi. Không xóa mẫu có lịch sử; khi sửa nội dung mẫu đã được sử dụng, hệ thống ngừng mẫu cũ và tạo phiên bản mới để giữ nguyên giờ của các lịch đã tạo. Nháp dùng mẫu cũ cần chọn lại mẫu đang hoạt động trước khi công bố.
-- **Manager → Phân ca**: xem ba khối Sáng/Chiều/Tối mỗi ngày, thêm nhiều nhân viên cùng lúc, thiết lập định mức cho từng ca và tạo nháp tuần theo ca mặc định trong hồ sơ. Xem [hướng dẫn phân ca](SHIFT_ROSTER.md). Hỗ trợ ngày/tuần/tháng, lọc nháp/đã công bố và công bố toàn bộ nháp hợp lệ trong kỳ; nếu một ca không hợp lệ, thao tác công bố bị từ chối và giữ nguyên nháp.
+- **Manager → Phân ca**: xem ba khối Sáng/Chiều/Tối mỗi ngày, thêm nhiều nhân viên cùng lúc, thiết lập định mức cho từng ca và tạo nháp tuần theo ca mặc định trong hồ sơ. Xem [hướng dẫn phân ca](SHIFT_ROSTER.md). Hỗ trợ ngày/tuần, lọc nháp/đã công bố và công bố toàn bộ nháp hợp lệ trong kỳ; nếu một ca không hợp lệ, thao tác công bố bị từ chối và giữ nguyên nháp.
 - Chỉ Manager cùng chi nhánh được phân ca. Backend kiểm tra chồng giờ trên tất cả lịch, gồm nháp và ca qua đêm; hai ca sát giờ kết thúc/bắt đầu được phép. Ca `ON_LEAVE` không gây trùng giờ, nhưng ngày đã duyệt nghỉ vẫn bị chặn phân ca.
 - Không phân/công bố ca đã bắt đầu, mẫu đã ngừng sử dụng hoặc nhân viên không hợp lệ. Không sửa/xóa ca đã bắt đầu hoặc đã chấm công. Khi sửa, thu hồi hoặc hủy lịch đã công bố, nhân viên bị ảnh hưởng nhận thông báo trong app.
 - Đổi ca vẫn cần Manager duyệt và kiểm tra lại cả lịch nháp; duyệt nghỉ/đổi ca khóa nhân viên để phối hợp với thao tác phân ca. Staff không có API sửa lịch chính thức.

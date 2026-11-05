@@ -32,6 +32,11 @@ class StatusBadge extends StatelessWidget {
       'NOT_CHECKED_IN' => ('Chờ vào ca', BadgeVariant.warning, Icons.schedule),
       'PENDING' ||
       'WAITING' => ('Chờ xử lý', BadgeVariant.warning, Icons.schedule),
+      'NEEDS_CORRECTION' => (
+        'Cần sửa công',
+        BadgeVariant.warning,
+        Icons.edit_calendar_outlined,
+      ),
       'PUBLISHED' => (
         'Đã công bố',
         BadgeVariant.success,

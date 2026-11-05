@@ -9,6 +9,8 @@ class AdminAccountsTab extends StatefulWidget {
   final List<dynamic> stores;
   final Future<void> Function() onRefresh;
   final VoidCallback onAddUser;
+  final VoidCallback? onPasswordSupport;
+  final String initialRole;
   final void Function(int userId, String userName) onResetDevice;
   final ValueChanged<Map<String, dynamic>>? onPlacement;
   const AdminAccountsTab({
@@ -17,6 +19,8 @@ class AdminAccountsTab extends StatefulWidget {
     this.stores = const [],
     required this.onRefresh,
     required this.onAddUser,
+    this.onPasswordSupport,
+    this.initialRole = '',
     required this.onResetDevice,
     this.onPlacement,
   });
@@ -122,15 +126,28 @@ class _AdminAccountsTabState extends State<AdminAccountsTab> {
       ),
     ],
     filterField: 'role',
+    initialFilter: widget.initialRole,
     filterOptions: const {
       'STAFF': 'Nhân viên',
       'MANAGER': 'Quản lý',
       'ADMIN': 'Admin',
     },
-    action: FilledButton.icon(
-      onPressed: widget.onAddUser,
-      icon: const Icon(Icons.person_add_outlined),
-      label: const Text('Tạo tài khoản'),
+    action: Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        if (widget.onPasswordSupport != null)
+          OutlinedButton.icon(
+            onPressed: widget.onPasswordSupport,
+            icon: const Icon(Icons.support_agent),
+            label: const Text('Hỗ trợ mật khẩu'),
+          ),
+        FilledButton.icon(
+          onPressed: widget.onAddUser,
+          icon: const Icon(Icons.person_add_outlined),
+          label: const Text('Tạo tài khoản'),
+        ),
+      ],
     ),
     columns: const [
       'Họ tên',

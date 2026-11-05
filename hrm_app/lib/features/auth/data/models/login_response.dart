@@ -8,6 +8,7 @@ class LoginResponse {
   final int userId;
   final String name;
   final String role;
+  final String? phone;
 
   @JsonKey(name: 'tokenType', defaultValue: 'Bearer')
   final String? tokenType;
@@ -17,6 +18,7 @@ class LoginResponse {
     required this.userId,
     required this.name,
     required this.role,
+    this.phone,
     this.tokenType,
   });
 

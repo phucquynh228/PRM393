@@ -32,6 +32,8 @@ public class ManagerRosterController {
     }
     @PostMapping("/schedules/generate-week")
     public ApiResponse<Map<String, Object>> generate(HttpServletRequest request, @Valid @RequestBody RosterRequests.GenerateWeek body) {
-        return ApiResponse.ok("Đã tạo lịch nháp theo ca mặc định", roster.generate(manager(request), body.weekStart()));
+        var result = roster.generate(manager(request), body.weekStart());
+        return ApiResponse.ok(((Number) result.get("created")).intValue() > 0
+                ? "Đã tạo lịch nháp theo ca mặc định" : "Không có ca nháp mới được tạo", result);
     }
 }

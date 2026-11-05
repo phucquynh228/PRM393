@@ -147,7 +147,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('admin switches day week month and filters branch queries', (
+  testWidgets('admin switches day and week and filters branch queries', (
     tester,
   ) async {
     final queries = <Map<String, dynamic>>[];
@@ -185,15 +185,13 @@ void main() {
     );
     await tester.tap(find.text('Hôm nay'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Tháng'));
+    expect(find.text('Tháng'), findsNothing);
+    await tester.tap(find.text('Tuần'));
     await tester.pumpAndSettle();
-    expect(
-      queries.last['from'],
-      ScheduleWeekStrip.keyOf(DateTime(day.year, day.month, 1)),
-    );
+    expect(queries.last['from'], ScheduleWeekStrip.keyOf(monday));
     expect(
       queries.last['to'],
-      ScheduleWeekStrip.keyOf(DateTime(day.year, day.month + 1, 0)),
+      ScheduleWeekStrip.keyOf(monday.add(const Duration(days: 6))),
     );
     await tester.tap(find.byType(DropdownButtonFormField<int>));
     await tester.pumpAndSettle();
@@ -363,7 +361,7 @@ void main() {
         body: StaffScheduleTab(
           state: state,
           refresh: () async {},
-          change: ({anchor, month}) {},
+          change: ({anchor}) {},
           details: (_) {},
           swap: (_) {},
           request: () => requested = true,

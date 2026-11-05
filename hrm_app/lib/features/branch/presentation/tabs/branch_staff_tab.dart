@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hrm_app/shared/presentation/widgets/content_widgets.dart';
 import 'package:hrm_app/shared/presentation/widgets/directory_list.dart';
 import 'package:hrm_app/features/branch/presentation/dialogs/branch_staff_sheets.dart';
+import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
 
 class BranchStaffTab extends StatelessWidget {
   final List<Map<String, dynamic>> staff;
@@ -68,6 +69,9 @@ class BranchStaffTab extends StatelessWidget {
       icon: const Icon(Icons.person_add_outlined),
       label: const Text('Thêm nhân viên'),
     ),
+    leading: const InlineNotice(
+      'Bấm Sửa nhân viên → Ca làm việc mặc định để chọn buổi làm theo từng thứ, sau đó Lưu nhân viên. Tạo nháp tuần sẽ sử dụng các ca đã thiết lập này.',
+    ),
     columns: const ['Họ tên', 'Số điện thoại', 'Thiết bị', 'Sửa', ''],
     cells: (s) => [
       DataCell(Text(s['name'] ?? '—')),
@@ -102,6 +106,13 @@ class BranchStaffTab extends StatelessWidget {
                   s['deviceId'] == null
                       ? 'Chưa liên kết thiết bị'
                       : 'Đã liên kết thiết bị',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  rosterSelection(s['fixedRoster']).isEmpty
+                      ? 'Chưa có ca mặc định'
+                      : '${rosterSelection(s['fixedRoster']).length} ca mặc định/tuần',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

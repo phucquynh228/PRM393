@@ -273,6 +273,10 @@ public class BranchManagerController {
             HttpServletRequest request,
             @PathVariable Long id,
             @Valid @RequestBody ManagerStaffRequest body) {
+        if (body.getPassword() != null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Manager không được đổi mật khẩu nhân viên. Nhân viên tự đổi hoặc yêu cầu Admin hỗ trợ.");
+        }
         Store store = getManagerStore(request);
         User staff = getStaffInStore(id, store);
         String phone = body.getPhone().trim();
@@ -282,10 +286,6 @@ public class BranchManagerController {
         staff.setName(body.getName().trim());
         applyFixedRoster(staff, body);
         staff.setPhone(phone);
-        if (body.getPassword() != null && !body.getPassword().isBlank()) {
-            staff.setPassword(passwordEncoder.encode(body.getPassword()));
-            staff.setDeviceId(null);
-        }
         return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật hồ sơ nhân viên", staffResponse(staff)));
     }
 
@@ -479,7 +479,9 @@ public class BranchManagerController {
         response.put("shiftName", attendance.getSchedule().getShift().getName());
         response.put("checkInTime", attendance.getCheckInTime());
         response.put("checkOutTime", attendance.getCheckOutTime());
-        response.put("status", attendance.getSchedule().getStatus().name());
+        response.put("status", com.cafehr.attendance.service.AttendanceTiming.status(attendance));
+        response.put("needsCorrection", com.cafehr.attendance.service.AttendanceTiming.needsCorrection(attendance, java.time.LocalDateTime.now()));
+        response.put("workedMinutes", com.cafehr.attendance.service.AttendanceTiming.workedMinutes(attendance));
         return response;
     }
 

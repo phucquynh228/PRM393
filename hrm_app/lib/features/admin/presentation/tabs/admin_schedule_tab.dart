@@ -16,7 +16,13 @@ import 'package:hrm_app/features/staff/presentation/helpers/staff_helpers.dart';
 class AdminScheduleTab extends StatefulWidget {
   final Dio dio;
   final List<dynamic> stores;
-  const AdminScheduleTab({super.key, required this.dio, required this.stores});
+  final bool initialTemplates;
+  const AdminScheduleTab({
+    super.key,
+    required this.dio,
+    required this.stores,
+    this.initialTemplates = false,
+  });
   @override
   State<AdminScheduleTab> createState() => _AdminScheduleTabState();
 }
@@ -27,19 +33,15 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
   DateTime? _day = DateUtils.dateOnly(DateTime.now());
   String _period = 'Week', _filter = 'ALL';
   int? _store;
-  bool _loading = true, _templates = false;
+  bool _loading = true;
+  late bool _templates = widget.initialTemplates;
   String? _error;
   int _version = 0;
   DateTime get _from => _period == 'Day'
       ? _anchor
-      : _period == 'Month'
-      ? DateTime(_anchor.year, _anchor.month, 1)
       : _anchor.subtract(Duration(days: _anchor.weekday - 1));
-  DateTime get _to => _period == 'Day'
-      ? _anchor
-      : _period == 'Month'
-      ? DateTime(_anchor.year, _anchor.month + 1, 0)
-      : _from.add(const Duration(days: 6));
+  DateTime get _to =>
+      _period == 'Day' ? _anchor : _from.add(const Duration(days: 6));
 
   @override
   void initState() {
@@ -138,9 +140,7 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
   }
 
   void _move(int direction) => _changeDate(
-    _period == 'Month'
-        ? DateTime(_anchor.year, _anchor.month + direction, 1)
-        : _anchor.add(Duration(days: direction * (_period == 'Day' ? 1 : 7))),
+    _anchor.add(Duration(days: direction * (_period == 'Day' ? 1 : 7))),
   );
 
   Future<void> _transfer(Map<String, dynamic> item) async {
@@ -324,7 +324,6 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
             segments: const [
               ButtonSegment(value: 'Day', label: Text('Ngày')),
               ButtonSegment(value: 'Week', label: Text('Tuần')),
-              ButtonSegment(value: 'Month', label: Text('Tháng')),
             ],
             selected: {_period},
             onSelectionChanged: _loading
@@ -448,7 +447,8 @@ class _AdminScheduleTabState extends State<AdminScheduleTab> {
       children: [
         PageHeading(
           title: 'Lịch làm toàn chuỗi',
-          subtitle: 'Theo dõi nhân sự theo ca và điều chuyển giữa các chi nhánh',
+          subtitle:
+              'Theo dõi nhân sự theo ca và điều chuyển giữa các chi nhánh',
           action: _templates
               ? FilledButton.icon(
                   onPressed: _loading ? null : () => _edit(),

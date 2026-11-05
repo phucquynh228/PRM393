@@ -1,6 +1,7 @@
 package com.cafehr.staff.service;
 
 import com.cafehr.attendance.entity.Attendance;
+import com.cafehr.attendance.service.AttendanceTiming;
 import com.cafehr.attendance.repository.AttendanceRepository;
 import com.cafehr.common.exception.BusinessException;
 import com.cafehr.notification.entity.StaffNotification;
@@ -48,10 +49,14 @@ public class StaffWorkspaceService {
         LocalDate today = LocalDate.now();
         LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         List<Attendance> history = attendance.findByUserIdOrderByCheckInTimeDesc(userId);
-        List<UserSchedule> todaySchedules = new ArrayList<>(schedules.findByUserIdAndDateAndPublishedTrue(userId, today));
-        history.stream().filter(a -> a.getCheckOutTime() == null)
+        var now = LocalDateTime.now();
+        var reviewScheduleIds = history.stream().filter(a -> AttendanceTiming.needsCorrection(a, now))
+                .map(a -> a.getSchedule().getId()).collect(java.util.stream.Collectors.toSet());
+        List<UserSchedule> todaySchedules = new ArrayList<>(schedules.findByUserIdAndDateAndPublishedTrue(userId, today).stream()
+                .filter(s -> !reviewScheduleIds.contains(s.getId())).toList());
+        history.stream().filter(a -> AttendanceTiming.canCheckOut(a, now))
                 .map(Attendance::getSchedule).filter(s -> !s.getDate().equals(today)).forEach(todaySchedules::add);
-        long workedMinutes = history.stream().filter(a -> a.getCheckOutTime() != null).mapToLong(a -> {
+        long workedMinutes = history.stream().filter(AttendanceTiming::validCompleted).mapToLong(a -> {
             LocalDateTime start = a.getCheckInTime().isAfter(monday.atStartOfDay()) ? a.getCheckInTime() : monday.atStartOfDay();
             LocalDateTime end = a.getCheckOutTime().isBefore(monday.plusWeeks(1).atStartOfDay())
                     ? a.getCheckOutTime() : monday.plusWeeks(1).atStartOfDay();

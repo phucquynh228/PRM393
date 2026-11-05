@@ -34,6 +34,7 @@ class AdminAttendanceTab extends StatelessWidget {
     filterOptions: const {
       'CHECKED_IN': 'Đang làm',
       'CHECKED_OUT': 'Hoàn thành',
+      'NEEDS_CORRECTION': 'Cần sửa công',
       'ABSENT': 'Vắng mặt',
     },
     dateField: 'checkInTime',

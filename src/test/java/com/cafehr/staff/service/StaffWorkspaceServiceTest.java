@@ -49,6 +49,21 @@ class StaffWorkspaceServiceTest {
         Map<String, Object> result = service.workspace(3L, monday, monday.plusDays(6));
         assertEquals(360L, result.get("weekWorkedMinutes"));
     }
+    @Test void invalidClosedRecordDoesNotLeakMultiDayHoursIntoCurrentWeek() {
+        User user = User.builder().id(3L).name("Staff").role(Role.STAFF).build();
+        LocalDate monday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        var shift = UserSchedule.builder().id(10L).user(user).date(monday.minusDays(12)).status(ScheduleStatus.CHECKED_OUT)
+                .shift(Shift.builder().name("Ca sáng").startTime(LocalTime.of(7, 0)).endTime(LocalTime.of(12, 0)).build()).build();
+        var invalid = Attendance.builder().user(user).schedule(shift).checkInTime(monday.minusDays(12).atTime(7, 0))
+                .checkOutTime(monday.atTime(12, 0)).build();
+        when(users.findById(3L)).thenReturn(Optional.of(user));
+        when(attendance.findByUserIdOrderByCheckInTimeDesc(3L)).thenReturn(List.of(invalid));
+        var result = service.workspace(3L, monday, monday.plusDays(6));
+        assertEquals(0L, result.get("weekWorkedMinutes"));
+        var view = StaffViews.attendance(invalid);
+        assertEquals(0L, view.get("workedMinutes")); assertEquals(true, view.get("needsCorrection"));
+        assertEquals("NEEDS_CORRECTION", view.get("status"));
+    }
     @Test void attendanceShowsLateEarlyAndActualMinutes() {
         User user = User.builder().id(3L).name("Staff").role(Role.STAFF).build();
         LocalDate day = LocalDate.now().minusDays(1);

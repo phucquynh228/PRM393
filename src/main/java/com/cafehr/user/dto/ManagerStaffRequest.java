@@ -18,6 +18,7 @@ public class ManagerStaffRequest {
     private String phone;
 
     @Size(min = 6, max = 100)
+    // Initial password on creation only; updates reject this field.
     private String password;
 
     @jakarta.validation.constraints.Size(max = 21)

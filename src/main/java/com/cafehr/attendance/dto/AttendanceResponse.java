@@ -28,4 +28,8 @@ public class AttendanceResponse {
     private String status;
     private Long storeId;
     private String storeName;
+    private long workedMinutes;
+    private boolean canCheckOut;
+    private boolean needsCorrection;
+    private LocalDateTime checkOutDeadline;
 }

@@ -246,8 +246,8 @@ void main() {
         destinations: const [
           AppDestination('Tổng quan', Icons.dashboard_outlined),
           AppDestination('Chi nhánh', Icons.storefront_outlined),
-          AppDestination('Tài khoản', Icons.people_outline),
           AppDestination('Chấm công', Icons.fact_check_outlined),
+          AppDestination('Lịch làm', Icons.calendar_month_outlined),
         ],
         child: AdminBranchesTab(
           stores: stores,

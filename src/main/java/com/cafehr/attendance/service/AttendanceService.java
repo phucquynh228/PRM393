@@ -173,8 +173,13 @@ public class AttendanceService {
             throw new BusinessException("Bạn đã check-out rồi");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        if (!AttendanceTiming.canCheckOut(attendance, now)) {
+            throw new BusinessException("Ca đã quá hạn check-out (tối đa 24 giờ từ lúc check-in) hoặc giờ vào không hợp lệ. Vui lòng gửi yêu cầu sửa công cho quản lý.");
+        }
+
         // Cập nhật check-out
-        attendance.setCheckOutTime(LocalDateTime.now());
+        attendance.setCheckOutTime(now);
         attendance = attendanceRepository.save(attendance);
 
         // Cập nhật trạng thái schedule
@@ -249,7 +254,11 @@ public class AttendanceService {
                 .checkOutTime(attendance.getCheckOutTime())
                 .checkInLat(attendance.getCheckInLat())
                 .checkInLng(attendance.getCheckInLng())
-                .status(attendance.getSchedule().getStatus().name())
+                .status(AttendanceTiming.status(attendance))
+                .workedMinutes(AttendanceTiming.workedMinutes(attendance))
+                .canCheckOut(AttendanceTiming.canCheckOut(attendance, LocalDateTime.now()))
+                .needsCorrection(AttendanceTiming.needsCorrection(attendance, LocalDateTime.now()))
+                .checkOutDeadline(AttendanceTiming.deadline(attendance))
                 .storeId(StaffViews.store(attendance.getSchedule()) == null ? null : StaffViews.store(attendance.getSchedule()).getId())
                 .storeName((String) StaffViews.schedule(attendance.getSchedule()).get("storeName"))
                 .build();

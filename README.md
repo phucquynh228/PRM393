@@ -72,5 +72,7 @@ flutter test --no-pub --concurrency=1
 - [Xuất báo cáo chấm công dành cho admin](docs/ADMIN_ATTENDANCE_REPORT.md)
 - [Giao diện và điều hướng](docs/FRONTEND_REDESIGN.md)
 - [Đăng nhập Google](docs/GOOGLE_LOGIN_SETUP.md)
+- [Quên mật khẩu — Admin hỗ trợ trực tiếp](docs/PASSWORD_SUPPORT.md)
+- [Hồ sơ & quản trị của Admin](docs/ADMIN_PROFILE.md)
 - [Chọn vị trí chi nhánh](docs/BRANCH_MAP_PICKER.md)
 - [Dữ liệu và script SQL](database/README.md)

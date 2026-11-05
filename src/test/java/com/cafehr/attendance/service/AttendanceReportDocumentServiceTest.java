@@ -78,6 +78,21 @@ class AttendanceReportDocumentServiceTest {
         capture("report.pdf", file.bytes());
     }
 
+    @Test void invalidMultiDayAttendanceNeverBecomesExcelMinutesOrACompletedShift() throws Exception {
+        var date = LocalDate.of(2026, 10, 24);
+        when(schedules.findAttendanceReport(any(), any(), isNull(), isNull())).thenReturn(List.of(
+                new AttendanceReportRow(date, 1L, 3L, "Nhân viên", "CN-01", "Chi nhánh", "Ca sáng",
+                        LocalTime.of(7, 0), LocalTime.of(12, 0), ScheduleStatus.CHECKED_OUT,
+                        date.atTime(7, 0), date.plusDays(12).atTime(12, 0), false)));
+        var file = documents.export("xlsx", "month", "2026-10-01", null, null);
+        try (var book = new XSSFWorkbook(new ByteArrayInputStream(file.bytes()))) {
+            assertEquals(0, book.getSheet("Tong hop").getRow(5).getCell(1).getNumericCellValue());
+            var detail = book.getSheet("Chi tiet").getRow(1);
+            assertEquals("", detail.getCell(10).getStringCellValue());
+            assertEquals("Cần sửa công", detail.getCell(12).getStringCellValue());
+        }
+    }
+
     @Test void emptyAndUnsupportedExportsAreRejected() {
         when(schedules.findAttendanceReport(any(), any(), isNull(), isNull())).thenReturn(List.of());
         assertThrows(BusinessException.class, () -> documents.export("xlsx", "month", "2026-10-01", null, null));

@@ -14,6 +14,7 @@ import 'package:hrm_app/features/staff/presentation/cubit/staff_cubit.dart';
 import 'package:hrm_app/features/staff/presentation/screens/staff_screen.dart';
 import 'package:hrm_app/features/staff/presentation/dialogs/staff_request_form.dart';
 import 'package:hrm_app/features/staff/presentation/dialogs/staff_profile_form.dart';
+import 'package:hrm_app/features/staff/presentation/widgets/staff_shift_card.dart';
 import 'package:hrm_app/core/theme/app_theme.dart';
 
 import '../../support/fakes.dart';
@@ -121,6 +122,50 @@ Future<void> captureStaff(WidgetTester tester, String name) async {
 }
 
 void main() {
+  testWidgets(
+    'expired shift disables checkout and offers attendance correction',
+    (tester) async {
+      int checkedOut = 0, corrections = 0;
+      final fixture = staffFixture();
+      final shift = Map<String, dynamic>.from(
+        (fixture['today'] as List).first as Map,
+      );
+      final record =
+          Map<String, dynamic>.from(
+              (fixture['attendance'] as List).first as Map,
+            )
+            ..['checkInTime'] = DateTime.now()
+                .subtract(const Duration(days: 12))
+                .toIso8601String();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StaffShiftCard(
+                schedule: shift,
+                record: record,
+                attendanceActions: true,
+                onCheckOut: () => checkedOut++,
+                onCorrection: () => corrections++,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Quá hạn check-out'),
+      );
+      expect(button.onPressed, isNull);
+      expect(find.text('Cần sửa công'), findsOneWidget);
+      await tester.ensureVisible(find.text('Yêu cầu sửa công'));
+      await tester.tap(find.text('Yêu cầu sửa công'));
+      expect(corrections, 1);
+      expect(checkedOut, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   setUpAll(() async {
     await (FontLoader(
       'HRMSans',
@@ -142,16 +187,16 @@ void main() {
       );
       addTearDown(dio.close);
       addTearDown(cubit.close);
-      final oldLoad = cubit.load(anchor: DateTime(2026, 10, 1), month: true);
+      final oldLoad = cubit.load(anchor: DateTime(2026, 10, 5));
       await Future<void>.delayed(Duration.zero);
-      final newLoad = cubit.load(anchor: DateTime(2026, 11, 1), month: true);
+      final newLoad = cubit.load(anchor: DateTime(2026, 11, 2));
       await Future<void>.delayed(Duration.zero);
       second.complete(jsonResponse({...staffFixture(), 'marker': 'new'}));
       await newLoad;
       first.complete(jsonResponse({...staffFixture(), 'marker': 'old'}));
       await oldLoad;
       expect(cubit.state.data['marker'], 'new');
-      expect(cubit.state.from, DateTime(2026, 11, 1));
+      expect(cubit.state.from, DateTime(2026, 11, 2));
     },
   );
 
@@ -209,7 +254,8 @@ void main() {
       expect(find.text('Quên / sửa chấm công'), findsOneWidget);
       await nav(tester, 'Lịch làm');
       expect(find.text('Lịch làm việc'), findsOneWidget);
-      await tester.tap(find.text('Tháng'));
+      expect(find.text('Tháng'), findsNothing);
+      await tester.tap(find.byTooltip('Khoảng tiếp theo'));
       await tester.pumpAndSettle();
       expect(paths.where((p) => p == '/staff/workspace').length, 2);
       await captureStaff(tester, 'staff-schedule-phone');
@@ -226,8 +272,48 @@ void main() {
       await nav(tester, 'Thêm');
       await tester.tap(find.text('Hồ sơ').last);
       await tester.pumpAndSettle();
-      expect(find.text('NV-0003'), findsOneWidget);
+      expect(find.text('Thông tin cá nhân'), findsOneWidget);
+      expect(find.text('Tài khoản và bảo mật'), findsOneWidget);
+      expect(find.text('Quản lý tài khoản'), findsNothing);
       await captureStaff(tester, 'staff-profile-phone');
+      await tester.tap(find.text('Thông tin công việc'));
+      await tester.pumpAndSettle();
+      expect(find.text('NV-0003'), findsOneWidget);
+      expect(find.text('HCM-TD01'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tài khoản và bảo mật'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Đổi mật khẩu'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Đổi mật khẩu'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).at(0), 'old-password');
+      await tester.enterText(find.byType(TextFormField).at(1), 'new-password');
+      await tester.enterText(find.byType(TextFormField).at(2), 'new-password');
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.widgetWithText(FilledButton, 'Đổi mật khẩu'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(paths, contains('/staff/password'));
+      expect(paths.any((p) => p.contains('password-support')), isFalse);
+      await tester.ensureVisible(find.text('Yêu cầu Admin hỗ trợ'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Yêu cầu Admin hỗ trợ'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quên mật khẩu'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).first)
+            .controller!
+            .text,
+        '0901000003',
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -299,7 +385,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), '123456');
     await tester.enterText(find.byType(TextFormField).at(1), 'newpassword');
     await tester.enterText(find.byType(TextFormField).at(2), 'different');
-    await tester.tap(find.text('Lưu thay đổi'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Đổi mật khẩu'));
     await tester.pumpAndSettle();
     expect(find.text('Mật khẩu nhập lại chưa khớp'), findsOneWidget);
     expect(sends, 0);

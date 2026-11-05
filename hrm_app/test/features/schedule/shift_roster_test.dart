@@ -91,10 +91,12 @@ typedef Send = Future<void> Function(
 Widget schedule({
   Send? send,
   Future<Map<String, dynamic>> Function(DateTime)? generate,
+  List<Map<String, dynamic>> staff = people,
+  VoidCallback? configureDefaults,
 }) => Scaffold(
   body: BranchScheduleTab(
     schedules: assignments,
-    staff: people,
+    staff: staff,
     shifts: templates,
     plans: plans,
     schedulePeriod: 'Week',
@@ -109,6 +111,7 @@ Widget schedule({
     cleanError: (error) => error.toString().replaceFirst('Exception: ', ''),
     onPickDate: pickDate,
     onGenerateWeek: generate,
+    onConfigureDefaults: configureDefaults,
   ),
 );
 
@@ -226,6 +229,8 @@ void main() {
       );
       await tester.tap(find.text('Mở hồ sơ'));
       await tester.pumpAndSettle();
+      expect(find.byType(TextFormField), findsNWidgets(2));
+      expect(find.text('Mật khẩu mới (không bắt buộc)'), findsNothing);
       final checkbox = find.byType(Checkbox).at(2);
       await tester.ensureVisible(checkbox);
       await tester.tap(checkbox);
@@ -235,6 +240,7 @@ void main() {
       expect(saved?['fixedRoster'], [
         {'dayOfWeek': 1, 'slot': 'EVENING'},
       ]);
+      expect(saved?.containsKey('password'), isFalse);
     },
   );
 
@@ -278,6 +284,14 @@ void main() {
       await preview(
         tester,
         schedule(
+          staff: [
+            {
+              ...people[0],
+              'fixedRoster': [
+                {'dayOfWeek': 1, 'slot': 'MORNING'},
+              ],
+            },
+          ],
           generate: (monday) async {
             requested = monday;
             return {
@@ -305,4 +319,61 @@ void main() {
       expect(find.textContaining('Đã được duyệt nghỉ'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'generation with no defaults explains setup and opens team without a false success',
+    (tester) async {
+      int generated = 0, opened = 0;
+      await preview(
+        tester,
+        schedule(
+          generate: (_) async {
+            generated++;
+            return {'created': 0, 'existing': 0, 'skipped': []};
+          },
+          configureDefaults: () => opened++,
+        ),
+        const Size(390, 844),
+        'shift-no-defaults',
+      );
+      await tester.ensureVisible(find.text('Tạo nháp tuần mới'));
+      await tester.tap(find.text('Tạo nháp tuần mới'));
+      await tester.pumpAndSettle();
+      expect(generated, 0);
+      expect(find.text('Chưa có ca mặc định'), findsOneWidget);
+      expect(find.text('Đã tạo lịch nháp tuần'), findsNothing);
+      await tester.tap(find.text('Mở Đội ngũ'));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('generating an existing week reports no new drafts', (
+    tester,
+  ) async {
+    await preview(
+      tester,
+      schedule(
+        staff: [
+          {
+            ...people[0],
+            'fixedRoster': [
+              {'dayOfWeek': 1, 'slot': 'MORNING'},
+            ],
+          },
+        ],
+        generate: (_) async => {'created': 0, 'existing': 3, 'skipped': []},
+      ),
+      const Size(390, 844),
+      'shift-already-generated',
+    );
+    await tester.ensureVisible(find.text('Tạo nháp tuần mới'));
+    await tester.tap(find.text('Tạo nháp tuần mới'));
+    await tester.pumpAndSettle();
+    expect(find.text('Không có ca nháp mới'), findsOneWidget);
+    expect(find.text('0 ca mới · 3 ca đã có · 0 ca bỏ qua'), findsOneWidget);
+    expect(find.text('Đã tạo lịch nháp tuần'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

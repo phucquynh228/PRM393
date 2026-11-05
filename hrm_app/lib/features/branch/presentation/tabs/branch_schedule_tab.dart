@@ -18,6 +18,7 @@ class BranchScheduleTab extends StatefulWidget {
   onSend;
   final Future<void> Function() onReloadSchedules;
   final Future<Map<String, dynamic>> Function(DateTime)? onGenerateWeek;
+  final VoidCallback? onConfigureDefaults;
   final void Function(String, {bool isError}) showMessage;
   final String Function(dynamic) cleanError;
   final Future<void> Function({
@@ -46,6 +47,7 @@ class BranchScheduleTab extends StatefulWidget {
     required this.cleanError,
     required this.onPickDate,
     this.onGenerateWeek,
+    this.onConfigureDefaults,
   });
   @override
   State<BranchScheduleTab> createState() => _BranchScheduleTabState();
@@ -58,6 +60,9 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
   String _filter = 'ALL';
   bool _working = false;
   bool get _blocked => _working || !widget.dataReady;
+  int get _configuredStaff => widget.staff
+      .where((person) => rosterSelection(person['fixedRoster']).isNotEmpty)
+      .length;
   final Set<int> _busy = {};
   List<Map<String, dynamic>> get _plans => [
     for (final slot in rosterSlots.keys)
@@ -87,17 +92,9 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
   }
 
   void _move(int direction) => widget.onDateChanged(
-    widget.schedulePeriod == 'Month'
-        ? DateTime(
-            widget.selectedDate.year,
-            widget.selectedDate.month + direction,
-            1,
-          )
-        : widget.selectedDate.add(
-            Duration(
-              days: direction * (widget.schedulePeriod == 'Day' ? 1 : 7),
-            ),
-          ),
+    widget.selectedDate.add(
+      Duration(days: direction * (widget.schedulePeriod == 'Day' ? 1 : 7)),
+    ),
   );
 
   Future<void> _settings() async {
@@ -154,6 +151,32 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
 
   Future<void> _generate() async {
     if (_blocked || widget.onGenerateWeek == null) return;
+    if (_configuredStaff == 0) {
+      final configure = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Chưa có ca mặc định'),
+          content: Text(
+            widget.staff.isEmpty
+                ? 'Chi nhánh chưa có nhân viên đang làm việc. Hãy thêm nhân viên trong Đội ngũ rồi thiết lập ca làm việc mặc định.'
+                : 'Tạo nháp tuần dùng ca làm việc mặc định của nhân viên. Vào Đội ngũ → Chỉnh sửa nhân viên → Ca làm việc mặc định, chọn các buổi theo thứ rồi Lưu nhân viên. Sau đó quay lại tuần cần tạo và bấm Tạo nháp tuần mới.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Đóng'),
+            ),
+            if (widget.onConfigureDefaults != null)
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Mở Đội ngũ'),
+              ),
+          ],
+        ),
+      );
+      if (mounted && configure == true) widget.onConfigureDefaults?.call();
+      return;
+    }
     setState(() => _working = true);
     try {
       final result = await widget.onGenerateWeek!(widget.scheduleFrom);
@@ -161,10 +184,16 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
       final skipped = (result['skipped'] as List? ?? [])
           .whereType<Map>()
           .toList();
+      final created = (result['created'] as num?)?.toInt() ?? 0;
+      final existing = (result['existing'] as num?)?.toInt() ?? 0;
+      // Show all days after generating so newly created drafts are visible.
+      setState(() => _day = null);
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Đã tạo lịch nháp tuần'),
+          title: Text(
+            created > 0 ? 'Đã tạo lịch nháp tuần' : 'Không có ca nháp mới',
+          ),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -173,11 +202,17 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${result['created'] ?? 0} ca mới · ${result['existing'] ?? 0} ca đã có · ${skipped.length} ca bỏ qua',
+                    '$created ca mới · $existing ca đã có · ${skipped.length} ca bỏ qua',
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Kiểm tra định mức, điều chỉnh nhân sự rồi bấm Công bố. Lịch đang có được giữ nguyên.',
+                  Text(
+                    created > 0
+                        ? 'Kiểm tra định mức, điều chỉnh nhân sự rồi bấm Công bố. Lịch đang có được giữ nguyên.'
+                        : existing > 0
+                        ? 'Các ca mặc định đã có trong tuần này. Lịch hiện có, gồm ca đã hủy hoặc nghỉ, được giữ nguyên. Dùng Thêm nhân sự nếu cần phân công thêm.'
+                        : skipped.isNotEmpty
+                        ? 'Các ca mặc định đều bị bỏ qua. Xem lý do bên dưới để điều chỉnh rồi tạo lại.'
+                        : 'Chưa có ca mặc định để tạo lịch. Vào Đội ngũ → Chỉnh sửa nhân viên và thiết lập Ca làm việc mặc định.',
                   ),
                   for (final row in skipped)
                     Padding(
@@ -364,7 +399,6 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
                   segments: const [
                     ButtonSegment(value: 'Day', label: Text('Ngày')),
                     ButtonSegment(value: 'Week', label: Text('Tuần')),
-                    ButtonSegment(value: 'Month', label: Text('Tháng')),
                   ],
                   selected: {widget.schedulePeriod},
                   onSelectionChanged: _working
@@ -376,6 +410,12 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
                   icon: const Icon(Icons.tune),
                   label: const Text('Định mức ca'),
                 ),
+                if (widget.onConfigureDefaults != null)
+                  OutlinedButton.icon(
+                    onPressed: _blocked ? null : widget.onConfigureDefaults,
+                    icon: const Icon(Icons.event_repeat),
+                    label: const Text('Ca mặc định'),
+                  ),
                 if (widget.schedulePeriod == 'Week')
                   OutlinedButton.icon(
                     onPressed:
@@ -391,6 +431,14 @@ class _BranchScheduleTabState extends State<BranchScheduleTab> {
                   ),
               ],
             ),
+            if (widget.dataReady && _configuredStaff == 0) ...[
+              const SizedBox(height: 12),
+              InlineNotice(
+                widget.staff.isEmpty
+                    ? 'Thêm nhân viên trong Đội ngũ rồi thiết lập ca mặc định để tạo nháp tuần.'
+                    : 'Nhân viên chưa có ca mặc định. Mở Ca mặc định → Chỉnh sửa nhân viên để chọn buổi làm theo từng thứ. Bạn vẫn có thể dùng Thêm nhân sự để phân ca trực tiếp.',
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [

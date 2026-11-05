@@ -14,7 +14,7 @@ class AdminOverviewTab extends StatelessWidget {
   final Map<String, dynamic>? dashboardData;
   final List<dynamic> stores, users, attendance;
   final Future<void> Function() onRefresh;
-  final VoidCallback onAddStore, onAddUser;
+  final VoidCallback onAddStore, onOpenProfile;
   final ValueChanged<int> onNavigate;
   final void Function(Map<String, dynamic>) onEditStore;
   final bool dataReady;
@@ -27,7 +27,7 @@ class AdminOverviewTab extends StatelessWidget {
     required this.attendance,
     required this.onRefresh,
     required this.onAddStore,
-    required this.onAddUser,
+    required this.onOpenProfile,
     required this.onNavigate,
     required this.onEditStore,
     this.dataReady = true,
@@ -67,14 +67,14 @@ class AdminOverviewTab extends StatelessWidget {
                     onTap: onAddStore,
                   ),
                   DashboardAction(
-                    label: 'Tạo tài khoản',
-                    icon: Icons.person_add_outlined,
-                    onTap: onAddUser,
+                    label: 'Hồ sơ & quản trị',
+                    icon: Icons.manage_accounts_outlined,
+                    onTap: onOpenProfile,
                   ),
                   DashboardAction(
                     label: 'Xem chấm công',
                     icon: Icons.fact_check_outlined,
-                    onTap: () => onNavigate(3),
+                    onTap: () => onNavigate(2),
                   ),
                 ],
               ),
@@ -105,7 +105,7 @@ class AdminOverviewTab extends StatelessWidget {
                     subtitle: 'Nhân viên và quản lý',
                     icon: Icons.groups_outlined,
                     color: AppColors.accent,
-                    onTap: () => onNavigate(2),
+                    onTap: onOpenProfile,
                   ),
                   StatMetricCard(
                     title: 'Vào ca hôm nay',
@@ -113,7 +113,7 @@ class AdminOverviewTab extends StatelessWidget {
                     subtitle: 'Tổng lượt đã check-in',
                     icon: Icons.fingerprint,
                     color: AppColors.primaryLight,
-                    onTap: () => onNavigate(3),
+                    onTap: () => onNavigate(2),
                   ),
                   StatMetricCard(
                     title: 'Đang trong ca',
@@ -121,7 +121,7 @@ class AdminOverviewTab extends StatelessWidget {
                     subtitle: 'Đã vào ca, chưa ra ca',
                     icon: Icons.schedule_rounded,
                     color: AppColors.primaryDark,
-                    onTap: () => onNavigate(3),
+                    onTap: () => onNavigate(2),
                   ),
                 ],
               ),
@@ -164,7 +164,7 @@ class AdminOverviewTab extends StatelessWidget {
                                         '$noStore nhân viên chưa có chi nhánh',
                                     detail: 'Kiểm tra lại thông tin phân công',
                                     icon: Icons.person_pin_circle_outlined,
-                                    onTap: () => onNavigate(2),
+                                    onTap: onOpenProfile,
                                   ),
                                 if (unassigned.isEmpty && noStore == 0)
                                   const DashboardTask(
@@ -186,7 +186,7 @@ class AdminOverviewTab extends StatelessWidget {
                       title: 'Chấm công hôm nay',
                       subtitle:
                           'Toàn hệ thống · ${BranchHelpers.prettyDate(now)}',
-                      onOpen: () => onNavigate(3),
+                      onOpen: () => onNavigate(2),
                       child: dataReady
                           ? AttendanceSummary(
                               working: working,
@@ -197,7 +197,7 @@ class AdminOverviewTab extends StatelessWidget {
                     const SizedBox(height: 20),
                     AttendanceActivity(
                       records: today,
-                      onOpen: () => onNavigate(3),
+                      onOpen: () => onNavigate(2),
                     ),
                     const SizedBox(height: 20),
                     DashboardSection(

@@ -16,7 +16,6 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.Normalizer;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -97,11 +96,11 @@ public class AttendanceReportDocumentService {
             index = 1;
             for (var row : snapshot.rows()) {
                 Object minutes = !AttendanceReportService.completed(row) ? "" :
-                        Math.max(0, Duration.between(row.checkInTime(), row.checkOutTime()).toMinutes());
+                        AttendanceTiming.workedMinutes(row.checkInTime(), row.checkOutTime());
                 put(detail, index, index % 2 == 0 ? alternateStyle : bodyStyle,
                         row.date(), row.scheduleId(), "NV-" + String.format("%04d", row.userId()), row.userName(), row.storeName(),
                         row.shiftName(), row.startTime(), row.endTime(), row.checkInTime(), row.checkOutTime(), minutes,
-                        AttendanceReportService.lateMinutes(row), AttendanceReportService.status(row.status()),
+                        AttendanceReportService.lateMinutes(row), AttendanceReportService.status(row),
                         Boolean.TRUE.equals(row.manuallyAdjusted()) ? "Có" : "Không");
                 detail.getRow(index++).setHeightInPoints(32);
             }

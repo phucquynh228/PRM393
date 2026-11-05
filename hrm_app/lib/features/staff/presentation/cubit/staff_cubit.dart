@@ -7,12 +7,11 @@ import 'package:hrm_app/features/attendance/domain/repositories/attendance_repos
 class StaffState {
   final StaffItem data;
   final DateTime anchor;
-  final bool month, loading, busy, initialized;
+  final bool loading, busy, initialized;
   final String? error, message;
   StaffState({
     this.data = const {},
     required this.anchor,
-    this.month = false,
     this.loading = false,
     this.busy = false,
     this.initialized = false,
@@ -20,12 +19,9 @@ class StaffState {
     this.message,
   });
 
-  DateTime get from => month
-      ? DateTime(anchor.year, anchor.month, 1)
-      : DateTime(anchor.year, anchor.month, anchor.day - anchor.weekday + 1);
-  DateTime get to => month
-      ? DateTime(anchor.year, anchor.month + 1, 0)
-      : from.add(const Duration(days: 6));
+  DateTime get from =>
+      DateTime(anchor.year, anchor.month, anchor.day - anchor.weekday + 1);
+  DateTime get to => from.add(const Duration(days: 6));
   StaffItem get profile =>
       Map<String, dynamic>.from(data['profile'] as Map? ?? {});
   List<StaffItem> items(String key) => staffItems(data[key]);
@@ -37,7 +33,6 @@ class StaffState {
   StaffState copy({
     StaffItem? data,
     DateTime? anchor,
-    bool? month,
     bool? loading,
     bool? busy,
     bool? initialized,
@@ -46,7 +41,6 @@ class StaffState {
   }) => StaffState(
     data: data ?? this.data,
     anchor: anchor ?? this.anchor,
-    month: month ?? this.month,
     loading: loading ?? this.loading,
     busy: busy ?? this.busy,
     initialized: initialized ?? this.initialized,
@@ -62,14 +56,14 @@ class StaffCubit extends Cubit<StaffState> {
   StaffCubit(this.repository, this.attendance)
     : super(StaffState(anchor: DateTime.now()));
 
-  Future<void> load({DateTime? anchor, bool? month}) async {
+  Future<void> load({DateTime? anchor}) async {
     if (state.busy) return;
-    await _load(anchor: anchor, month: month);
+    await _load(anchor: anchor);
   }
 
-  Future<void> _load({DateTime? anchor, bool? month, String? message}) async {
+  Future<void> _load({DateTime? anchor, String? message}) async {
     final id = ++_loadId;
-    emit(state.copy(anchor: anchor, month: month, loading: true));
+    emit(state.copy(anchor: anchor, loading: true));
     final from = state.from, to = state.to;
     try {
       final data = await repository.workspace(from, to);

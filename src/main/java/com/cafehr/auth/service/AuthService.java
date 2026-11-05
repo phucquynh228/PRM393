@@ -81,7 +81,8 @@ public class AuthService {
         String token = jwtUtil.generateToken(
                 user.getPhone(),
                 user.getId(),
-                user.getRole().name()
+                user.getRole().name(),
+                user.getCredentialsVersion()
         );
 
         // Bước 5: Build response

@@ -81,6 +81,21 @@ class FixedRosterIntegrationTest {
     }
     List<UserSchedule> week() { return schedules.findByStoreIdAndDateBetweenOrderByDateAscShiftStartTimeAsc(store.getId(), monday, monday.plusDays(6)); }
 
+    @Test void missingDefaultsCannotReportSuccessfulGenerationOfAnEmptyWeek() {
+        var error = assertThrows(BusinessException.class, () -> roster.generate(manager.getId(), monday));
+        assertTrue(error.getMessage().contains("Chưa thiết lập ca làm việc mặc định"));
+        assertTrue(week().isEmpty());
+    }
+
+    @Test void branchWithoutActiveStaffGetsAnActionableError() {
+        staff.setEmploymentStatus(EmploymentStatus.INACTIVE);
+        peer.setEmploymentStatus(EmploymentStatus.INACTIVE);
+        users.flush();
+        var error = assertThrows(BusinessException.class, () -> roster.generate(manager.getId(), monday));
+        assertTrue(error.getMessage().contains("chưa có nhân viên đang làm việc"));
+        assertTrue(week().isEmpty());
+    }
+
     @Test void persistedPreferencesGenerateOnceAndOnlyPublishSendsNotifications() {
         staff.getFixedRoster().addAll(List.of(new FixedRosterEntry(1, ShiftSlot.EVENING), new FixedRosterEntry(2, ShiftSlot.EVENING)));
         users.saveAndFlush(staff); stores.flush();
@@ -175,6 +190,30 @@ class FixedRosterIntegrationTest {
         mvc.perform(put("/api/admin/schedules/" + assignment.getId() + "/transfer").with(user("manager").roles("MANAGER"))
                         .contentType("application/json").content("{\"sourceStoreId\":" + other.getId() + ",\"targetStoreId\":" + store.getId() + "}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test void transferredPublishedShiftDoesNotReappearAtHomeWhenWeekIsGeneratedAgain() throws Exception {
+        staff.getFixedRoster().add(new FixedRosterEntry(1, ShiftSlot.MORNING));
+        users.saveAndFlush(staff);
+        assertEquals(1, roster.generate(manager.getId(), monday).get("created"));
+        var assignment = week().get(0);
+        assignment.setPublished(true); schedules.flush();
+        Long assignmentId = assignment.getId();
+        transfers.transfer(assignmentId, store.getId(), other.getId());
+        schedules.flush(); em.clear();
+
+        var regenerated = roster.generate(manager.getId(), monday);
+        assertEquals(0, regenerated.get("created")); assertEquals(1, regenerated.get("existing"));
+        assertTrue(week().isEmpty());
+        var all = schedules.findByUserIdAndDateAndPublishedTrue(staff.getId(), monday);
+        assertEquals(1, all.size()); assertEquals(assignmentId, all.get(0).getId());
+        assertEquals(other.getId(), all.get(0).getStore().getId());
+
+        mvc.perform(get("/api/staff/workspace").with(user("staff").roles("STAFF"))
+                        .requestAttr("userId", staff.getId()).param("from", monday.toString()).param("to", monday.plusDays(6).toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.schedules.length()").value(1))
+                .andExpect(jsonPath("$.data.schedules[0].id").value(assignmentId))
+                .andExpect(jsonPath("$.data.schedules[0].storeId").value(other.getId()));
     }
 
     @Test void transferredShiftChecksGpsAtReceivingBranchAndNormalForeignShiftIsRejected() {

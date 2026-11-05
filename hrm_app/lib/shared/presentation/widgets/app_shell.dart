@@ -21,6 +21,7 @@ class AppShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final Widget child;
   final VoidCallback? onRefresh;
+  final VoidCallback? onProfile;
   final VoidCallback onLogout;
   final bool refreshing;
   final String? error;
@@ -34,6 +35,7 @@ class AppShell extends StatelessWidget {
     required this.child,
     required this.onLogout,
     this.onRefresh,
+    this.onProfile,
     this.refreshing = false,
     this.error,
   });
@@ -120,6 +122,12 @@ class AppShell extends StatelessWidget {
           ),
           toolbarHeight: 76,
           actions: [
+            if (onProfile != null)
+              IconButton(
+                tooltip: 'Hồ sơ cá nhân',
+                onPressed: onProfile,
+                icon: const Icon(Icons.account_circle_outlined),
+              ),
             if (onRefresh != null)
               IconButton(
                 tooltip: 'Làm mới dữ liệu',

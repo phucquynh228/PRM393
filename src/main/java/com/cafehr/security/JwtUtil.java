@@ -37,9 +37,14 @@ public class JwtUtil {
      * Tạo JWT token cho user.
      */
     public String generateToken(String phone, Long userId, String role) {
+        return generateToken(phone, userId, role, 0);
+    }
+
+    public String generateToken(String phone, Long userId, String role, long credentialsVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("role", role);
+        claims.put("credentialsVersion", credentialsVersion);
 
         return Jwts.builder()
                 .claims(claims)
@@ -106,6 +111,9 @@ public class JwtUtil {
      */
     public boolean validateToken(String token, UserDetails userDetails) {
         final String phone = extractPhone(token);
-        return phone.equals(userDetails.getUsername()) && !isTokenExpired(token);
+        Number version = extractClaim(token, claims -> claims.get("credentialsVersion", Number.class));
+        long tokenVersion = version == null ? 0 : version.longValue();
+        return phone.equals(userDetails.getUsername()) && !isTokenExpired(token)
+                && (!(userDetails instanceof HrmUserDetails hrm) || tokenVersion == hrm.getCredentialsVersion());
     }
 }

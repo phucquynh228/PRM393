@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:hrm_app/core/theme/app_theme.dart';
+import 'package:hrm_app/core/utils/attendance_timing.dart';
 import 'package:hrm_app/features/staff/data/repositories/staff_repository.dart';
 import 'package:hrm_app/shared/presentation/widgets/content_widgets.dart';
 import 'package:hrm_app/shared/presentation/widgets/status_badge.dart';
@@ -10,7 +11,7 @@ class StaffShiftCard extends StatelessWidget {
   final StaffItem schedule;
   final StaffItem? record;
   final bool busy, attendanceActions;
-  final VoidCallback? onCheckIn, onCheckOut, onSwap, onDetails;
+  final VoidCallback? onCheckIn, onCheckOut, onSwap, onDetails, onCorrection;
   const StaffShiftCard({
     super.key,
     required this.schedule,
@@ -21,12 +22,15 @@ class StaffShiftCard extends StatelessWidget {
     this.onCheckOut,
     this.onSwap,
     this.onDetails,
+    this.onCorrection,
   });
 
   @override
   Widget build(BuildContext context) {
     final pending = schedule['status'] == 'PENDING',
         working = schedule['status'] == 'CHECKED_IN';
+    final needsCorrection =
+        record != null && attendanceNeedsCorrection(record!);
     return SurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -41,7 +45,11 @@ class StaffShiftCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               StatusBadge.fromStatus(
-                pending ? 'NOT_CHECKED_IN' : '${schedule['status']}',
+                needsCorrection
+                    ? 'NEEDS_CORRECTION'
+                    : pending
+                    ? 'NOT_CHECKED_IN'
+                    : '${schedule['status']}',
               ),
             ],
           ),
@@ -69,7 +77,7 @@ class StaffShiftCard extends StatelessWidget {
           if (attendanceActions && (pending || working)) ...[
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: busy
+              onPressed: busy || needsCorrection
                   ? null
                   : working
                   ? onCheckOut
@@ -78,12 +86,26 @@ class StaffShiftCard extends StatelessWidget {
               label: Text(
                 busy
                     ? 'Đang xử lý…'
+                    : needsCorrection
+                    ? 'Quá hạn check-out'
                     : working
                     ? 'Check-out · Kết thúc ca'
                     : 'Check-in · Bắt đầu ca',
               ),
             ),
-            if (working && onCheckOut == null)
+            if (needsCorrection) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Chỉ được check-out trong 24 giờ từ lúc check-in. Hãy gửi yêu cầu sửa công để quản lý xác nhận giờ làm thực tế.',
+              ),
+              if (onCorrection != null)
+                TextButton.icon(
+                  onPressed: busy ? null : onCorrection,
+                  icon: const Icon(Icons.edit_calendar_outlined),
+                  label: const Text('Yêu cầu sửa công'),
+                ),
+            ],
+            if (working && onCheckOut == null && !needsCorrection)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
                 child: Text(

@@ -1,6 +1,7 @@
 package com.cafehr.staff.view;
 
 import com.cafehr.attendance.entity.Attendance;
+import com.cafehr.attendance.service.AttendanceTiming;
 import com.cafehr.branch.entity.Store;
 import com.cafehr.notification.entity.StaffNotification;
 import com.cafehr.schedule.entity.UserSchedule;
@@ -78,8 +79,11 @@ public final class StaffViews {
                 "shiftName", schedule.getShift().getName(), "storeName", schedule(schedule).get("storeName"),
                 "storeId", store(schedule) == null ? null : store(schedule).getId(),
                 "checkInTime", attendance.getCheckInTime(), "checkOutTime", checkOut,
-                "status", schedule.getStatus().name(), "manuallyAdjusted", attendance.isManuallyAdjusted(),
-                "workedMinutes", checkOut == null ? 0 : Math.max(0, Duration.between(attendance.getCheckInTime(), checkOut).toMinutes()),
+                "status", AttendanceTiming.status(attendance), "manuallyAdjusted", attendance.isManuallyAdjusted(),
+                "workedMinutes", AttendanceTiming.workedMinutes(attendance),
+                "canCheckOut", AttendanceTiming.canCheckOut(attendance, LocalDateTime.now()),
+                "needsCorrection", AttendanceTiming.needsCorrection(attendance, LocalDateTime.now()),
+                "checkOutDeadline", AttendanceTiming.deadline(attendance),
                 "lateMinutes", Math.max(0, Duration.between(start(schedule), attendance.getCheckInTime()).toMinutes()),
                 "earlyLeaveMinutes", checkOut == null ? 0 : Math.max(0, Duration.between(checkOut, end(schedule)).toMinutes()));
     }

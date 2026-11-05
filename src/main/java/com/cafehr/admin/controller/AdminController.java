@@ -3,7 +3,9 @@ package com.cafehr.admin.controller;
 import com.cafehr.admin.dto.DashboardSummaryResponse;
 import com.cafehr.attendance.dto.AttendanceResponse;
 import com.cafehr.attendance.repository.AttendanceRepository;
+import com.cafehr.attendance.service.AttendanceTiming;
 import com.cafehr.auth.repository.GoogleAccountRepository;
+import com.cafehr.auth.repository.PasswordSupportRepository;
 import com.cafehr.branch.dto.StoreRequest;
 import com.cafehr.branch.dto.StoreResponse;
 import com.cafehr.branch.entity.Store;
@@ -45,6 +47,7 @@ public class AdminController {
     private final AttendanceRepository attendanceRepository;
     private final PasswordEncoder passwordEncoder;
     private final GoogleAccountRepository googleAccounts;
+    private final PasswordSupportRepository passwordSupport;
     private final BranchLifecycleService branchLifecycle;
 
     // ================= DASHBOARD BÁO CÁO =================
@@ -69,6 +72,9 @@ public class AdminController {
 
     @PostMapping("/stores")
     public ResponseEntity<ApiResponse<StoreResponse>> createStore(@Valid @RequestBody StoreRequest request) {
+        if (request.getManagerId() != null) {
+            throw new BusinessException("Hãy tạo chi nhánh và thêm hoặc điều chuyển nhân viên vào chi nhánh trước khi bổ nhiệm Manager.");
+        }
         // 1. Chuẩn hóa & kiểm tra trùng mã chi nhánh
         String code = normalizeCode(request.getCode(), request.getName());
         if (storeRepository.existsByCode(code)) {
@@ -90,10 +96,6 @@ public class AdminController {
                 .build();
 
         storeRepository.save(store);
-        // Bổ nhiệm sau khi chi nhánh đã có ID; điều chuyển qua cùng một luồng nghiệp vụ.
-        if (request.getManagerId() != null) {
-            branchLifecycle.assignManager(store.getId(), request.getManagerId());
-        }
 
         Store savedStore = storeRepository.save(store);
         return ResponseEntity.ok(ApiResponse.ok("Tạo chi nhánh thành công", toStoreResponse(savedStore)));
@@ -136,7 +138,7 @@ public class AdminController {
         store.setStatus(newStatus);
 
         // 4. Bổ nhiệm Cửa hàng trưởng (Manager Assignment / Succession)
-        if (request.getManagerId() != null && (store.getManager() == null || !store.getManager().getId().equals(request.getManagerId()))) {
+        if (request.getManagerId() != null) {
             branchLifecycle.assignManager(id, request.getManagerId());
         }
 
@@ -252,6 +254,9 @@ public class AdminController {
         if (!userRepository.existsById(id)) {
             throw new BusinessException("Không tìm thấy tài khoản id: " + id);
         }
+        if (passwordSupport.existsByUserIdOrHandledById(id, id)) {
+            throw new BusinessException("Tài khoản có lịch sử hỗ trợ mật khẩu. Hãy ngừng hoạt động thay vì xóa để giữ lịch sử xử lý.");
+        }
         googleAccounts.findByUserId(id).ifPresent(googleAccounts::delete);
         googleAccounts.flush();
         userRepository.deleteById(id);
@@ -271,7 +276,11 @@ public class AdminController {
                 .checkOutTime(a.getCheckOutTime())
                 .checkInLat(a.getCheckInLat())
                 .checkInLng(a.getCheckInLng())
-                .status(a.getSchedule() != null && a.getSchedule().getStatus() != null ? a.getSchedule().getStatus().name() : "N/A")
+                .status(AttendanceTiming.status(a))
+                .workedMinutes(AttendanceTiming.workedMinutes(a))
+                .canCheckOut(AttendanceTiming.canCheckOut(a, java.time.LocalDateTime.now()))
+                .needsCorrection(AttendanceTiming.needsCorrection(a, java.time.LocalDateTime.now()))
+                .checkOutDeadline(AttendanceTiming.deadline(a))
                 .storeId(a.getSchedule() == null || com.cafehr.staff.view.StaffViews.store(a.getSchedule()) == null ? null : com.cafehr.staff.view.StaffViews.store(a.getSchedule()).getId())
                 .storeName(a.getSchedule() == null ? null : (String) com.cafehr.staff.view.StaffViews.schedule(a.getSchedule()).get("storeName"))
                 .build()

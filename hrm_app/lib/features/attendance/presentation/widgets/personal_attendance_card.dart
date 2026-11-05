@@ -150,7 +150,11 @@ class _AttendanceCard extends StatelessWidget {
                           state.busy ||
                           schedule.resolvedId <= 0 ||
                           (schedule.status == 'CHECKED_IN' &&
-                              state.openAttendance(schedule.resolvedId) == null)
+                              (state.openAttendance(schedule.resolvedId) ==
+                                      null ||
+                                  !state
+                                      .openAttendance(schedule.resolvedId)!
+                                      .canCheckOut))
                       ? null
                       : () {
                           final event = schedule.status == 'CHECKED_IN'
@@ -182,6 +186,14 @@ class _AttendanceCard extends StatelessWidget {
                   state.openAttendance(schedule.resolvedId) == null)
                 const Text(
                   'Chưa tìm thấy bản ghi vào ca. Hãy làm mới.',
+                  style: TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+              if (state
+                      .openAttendance(schedule.resolvedId)
+                      ?.requiresCorrection ==
+                  true)
+                const Text(
+                  'Ca đã quá hạn check-out 24 giờ. Vui lòng liên hệ quản lý để sửa công.',
                   style: TextStyle(color: AppColors.error, fontSize: 12),
                 ),
               const SizedBox(height: 16),

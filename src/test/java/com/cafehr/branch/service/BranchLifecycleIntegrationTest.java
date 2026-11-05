@@ -44,6 +44,7 @@ class BranchLifecycleIntegrationTest {
     @Autowired BranchRequestRepository requests;
     @Autowired StaffNotificationRepository notifications;
     @Autowired PasswordEncoder passwords;
+    @Autowired jakarta.persistence.EntityManager entityManager;
     @Autowired JwtUtil jwt;
     @Autowired MockMvc mvc;
     Store source, target;
@@ -82,6 +83,37 @@ class BranchLifecycleIntegrationTest {
     BranchClosureRequest mixedPlan() {
         return plan(transfer(staff), placement(peer, EmployeePlacement.Action.INACTIVE, null, false),
                 placement(manager, EmployeePlacement.Action.WAITING_TRANSFER, null, false));
+    }
+
+    @Test void managerAssignmentRejectsOtherBranchAndUnassignedEmployeesWithoutMovingThem() {
+        var future = assign(staff, 2);
+        assertThrows(BusinessException.class, () -> service.assignManager(target.getId(), staff.getId()));
+        assertEquals(source.getId(), staff.getStore().getId()); assertEquals(Role.STAFF, staff.getRole());
+        assertEquals(ScheduleStatus.PENDING, future.getStatus()); assertNull(target.getManager());
+        peer.setStore(null); users.flush();
+        assertThrows(BusinessException.class, () -> service.assignManager(target.getId(), peer.getId()));
+        assertNull(peer.getStore()); assertEquals(Role.STAFF, peer.getRole());
+    }
+
+    @Test void managerAssignmentPromotesOwnEmployeeAndKeepsSchedules() {
+        var future = assign(staff, 2);
+        service.assignManager(source.getId(), staff.getId()); users.flush();
+        assertEquals(staff.getId(), source.getManager().getId()); assertEquals(Role.MANAGER, staff.getRole());
+        assertEquals(Role.STAFF, manager.getRole()); assertEquals(source.getId(), staff.getStore().getId());
+        assertEquals(ScheduleStatus.PENDING, future.getStatus());
+        service.assignManager(source.getId(), staff.getId());
+        assertEquals(staff.getId(), source.getManager().getId());
+    }
+
+    @Test void branchApiRejectsForeignManagerAndManagerDuringBranchCreation() throws Exception {
+        String body = "{\"name\":\"Chi nhánh\",\"latitude\":10,\"longitude\":106,\"allowedRadius\":200,\"status\":\"ACTIVE\",\"managerId\":" + staff.getId() + "}";
+        mvc.perform(put("/api/admin/stores/" + target.getId()).with(user("admin").roles("ADMIN"))
+                .contentType("application/json").content(body)).andExpect(status().isBadRequest());
+        assertNull(target.getManager()); assertEquals(source.getId(), staff.getStore().getId());
+        long count = stores.count();
+        mvc.perform(post("/api/admin/stores").with(user("admin").roles("ADMIN"))
+                .contentType("application/json").content(body)).andExpect(status().isBadRequest());
+        assertEquals(count, stores.count());
     }
 
     @Test void closingPreservesHistoryCancelsFutureAndHandlesAllEmployees() {
@@ -176,6 +208,37 @@ class BranchLifecycleIntegrationTest {
                 .andExpect(status().isOk());
         assertEquals(target.getId(), staff.getStore().getId());
         assertEquals(source.getId(), historical.getStore().getId()); assertEquals(ScheduleStatus.CANCELLED, future.getStatus());
+    }
+
+    @Test void managerCannotChangeStaffPasswordEvenBySendingItDirectly() throws Exception {
+        staff.setDeviceId("staff-linked-device"); users.flush();
+        String originalPassword = staff.getPassword(), originalName = staff.getName(), originalPhone = staff.getPhone();
+        long originalVersion = staff.getCredentialsVersion();
+        mvc.perform(put("/api/manager/staff/" + staff.getId()).with(user(manager.getPhone()).roles("MANAGER"))
+                .requestAttr("userId", manager.getId()).contentType("application/json")
+                .content("{\"name\":\"Changed by manager\",\"phone\":\"0909999991\",\"password\":\"new-password\",\"fixedRoster\":[]}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/password-support/1").with(user(manager.getPhone()).roles("MANAGER"))
+                .contentType("application/json").content("{\"action\":\"RESOLVE\",\"identityVerified\":true,\"newPassword\":\"new-password\"}"))
+                .andExpect(status().isForbidden());
+        entityManager.refresh(staff);
+        assertEquals(originalPassword, staff.getPassword()); assertEquals(originalName, staff.getName());
+        assertEquals(originalPhone, staff.getPhone()); assertEquals("staff-linked-device", staff.getDeviceId());
+        assertEquals(originalVersion, staff.getCredentialsVersion());
+    }
+
+    @Test void managerCanStillEditStaffProfileWithoutTouchingCredentialsOrDevice() throws Exception {
+        staff.setDeviceId("staff-linked-device");
+        staff.setPhone("09" + String.format("%08d", java.util.concurrent.ThreadLocalRandom.current().nextInt(100000000)));
+        users.flush(); String originalPassword = staff.getPassword(); long originalVersion = staff.getCredentialsVersion();
+        mvc.perform(put("/api/manager/staff/" + staff.getId()).with(user(manager.getPhone()).roles("MANAGER"))
+                .requestAttr("userId", manager.getId()).contentType("application/json")
+                .content("{\"name\":\"Staff updated\",\"phone\":\"" + staff.getPhone() + "\",\"fixedRoster\":[{\"dayOfWeek\":1,\"slot\":\"MORNING\"}]}"))
+                .andExpect(status().isOk());
+        users.flush(); entityManager.refresh(staff);
+        assertEquals("Staff updated", staff.getName()); assertEquals(1, staff.getFixedRoster().size());
+        assertEquals(originalPassword, staff.getPassword()); assertEquals("staff-linked-device", staff.getDeviceId());
+        assertEquals(originalVersion, staff.getCredentialsVersion());
     }
 
     @Test void receivingManagerCanReassignSameShiftAfterOldBranchCancelledIt() throws Exception {

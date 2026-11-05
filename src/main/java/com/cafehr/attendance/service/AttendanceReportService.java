@@ -83,18 +83,23 @@ public class AttendanceReportService {
                 "Mã chi nhánh", "Chi nhánh", "Ca làm", "Giờ bắt đầu", "Giờ kết thúc",
                 "Vào ca", "Ra ca", "Số phút làm thực tế", "Trạng thái", "Đã điều chỉnh"));
         for (AttendanceReportRow row : report.rows()) {
-            Object workedMinutes = row.checkInTime() == null || row.checkOutTime() == null ? ""
-                    : Math.max(0, Duration.between(row.checkInTime(), row.checkOutTime()).toMinutes());
+            Object workedMinutes = completed(row) ? AttendanceTiming.workedMinutes(row.checkInTime(), row.checkOutTime()) : "";
             csv.append(line(row.date(), row.scheduleId(), "NV-" + String.format("%04d", row.userId()),
                     row.userName(), row.storeCode(), row.storeName(), row.shiftName(),
                     row.startTime(), row.endTime(), row.checkInTime(), row.checkOutTime(), workedMinutes,
-                    status(row.status()), Boolean.TRUE.equals(row.manuallyAdjusted()) ? "Có" : "Không"));
+                    status(row), Boolean.TRUE.equals(row.manuallyAdjusted()) ? "Có" : "Không"));
         }
         return new ReportFile(report.filename() + ".csv", csv.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     public static boolean completed(AttendanceReportRow row) {
-        return row.checkInTime() != null && row.checkOutTime() != null;
+        return AttendanceTiming.validCompleted(row.checkInTime(), row.checkOutTime());
+    }
+
+    public static String status(AttendanceReportRow row) {
+        boolean invalid = row.checkInTime() != null && (row.checkOutTime() != null
+                ? !completed(row) : java.time.LocalDateTime.now().isAfter(row.checkInTime().plus(AttendanceTiming.MAX_DURATION)));
+        return invalid ? "Cần sửa công" : status(row.status());
     }
 
     public static long lateMinutes(AttendanceReportRow row) {

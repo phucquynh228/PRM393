@@ -9,7 +9,10 @@ import 'package:hrm_app/shared/data/remote/api_client.dart';
 import 'package:hrm_app/core/config/api_config.dart';
 import 'package:hrm_app/features/admin/presentation/cubit/admin_cubit.dart';
 import 'package:hrm_app/features/admin/data/attendance_report_exporter.dart';
+import 'package:hrm_app/features/admin/data/admin_profile_repository.dart';
 import 'package:hrm_app/features/admin/presentation/screens/attendance_report_screen.dart';
+import 'package:hrm_app/features/admin/presentation/screens/admin_profile_screen.dart';
+import 'package:hrm_app/features/admin/presentation/screens/password_support_screen.dart';
 import 'package:hrm_app/shared/presentation/widgets/app_shell.dart';
 import 'package:hrm_app/features/admin/presentation/dialogs/store_form_dialog.dart';
 import 'package:hrm_app/features/admin/presentation/dialogs/branch_closure_dialog.dart';
@@ -152,10 +155,89 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     }
   }
 
+  void _openProfile() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => AdminProfileScreen(
+        loginResponse: widget.loginResponse,
+        cubit: _cubit,
+        repository: AdminProfileRepository(_dio),
+        onManageAccounts: _openAccounts,
+        onShiftTemplates: _openShiftTemplates,
+        onBranches: () {
+          setState(() => _index = 1);
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
+        onLogout: _logout,
+        onPasswordChanged: _signOut,
+      ),
+    ),
+  );
+
+  void _openPasswordSupport() => Navigator.of(context).push<void>(
+    MaterialPageRoute(builder: (_) => PasswordSupportScreen(dio: _dio)),
+  );
+
+  void _openAccounts(String role) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Quản lý tài khoản')),
+        body: BlocBuilder<AdminCubit, AdminState>(
+          bloc: _cubit,
+          builder: (context, state) => AdminAccountsTab(
+            initialRole: role,
+            onPasswordSupport: _openPasswordSupport,
+            users: state.users,
+            stores: state.stores,
+            onRefresh: _cubit.load,
+            onAddUser: _user,
+            onResetDevice: _reset,
+            onPlacement: (u) => _placement(employee: u),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  void _openShiftTemplates() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Mẫu ca làm việc')),
+        body: BlocBuilder<AdminCubit, AdminState>(
+          bloc: _cubit,
+          builder: (context, state) => AdminScheduleTab(
+            dio: _dio,
+            stores: state.stores,
+            initialTemplates: true,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  LoginResponse _currentLogin(AdminState state) {
+    final user = state.users
+        .whereType<Map>()
+        .where((u) => '${u['id']}' == '${widget.loginResponse.userId}')
+        .firstOrNull;
+    final login = widget.loginResponse;
+    return LoginResponse(
+      token: login.token,
+      userId: login.userId,
+      name: user?['name']?.toString() ?? login.name,
+      phone: user?['phone']?.toString() ?? login.phone,
+      role: login.role,
+      tokenType: login.tokenType,
+    );
+  }
+
   Future<void> _logout() async {
     if (!await _confirm('Đăng xuất?', 'Bạn muốn kết thúc phiên quản trị?')) {
       return;
     }
+    await _signOut();
+  }
+
+  Future<void> _signOut() async {
     await const FlutterSecureStorage().delete(key: 'jwt_token');
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -184,17 +266,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     bloc: _cubit,
     builder: (context, state) => AppShell(
       title: 'Quản trị hệ thống',
-      subtitle: 'HRM Cafe · ${widget.loginResponse.name}',
+      subtitle: 'HRM Cafe · ${_currentLogin(state).name}',
       selectedIndex: _index,
       onDestinationSelected: (i) => setState(() => _index = i),
       destinations: const [
         AppDestination('Tổng quan', Icons.dashboard_outlined),
         AppDestination('Chi nhánh', Icons.storefront_outlined),
-        AppDestination('Tài khoản', Icons.people_outline),
         AppDestination('Chấm công', Icons.fact_check_outlined),
         AppDestination('Lịch làm', Icons.calendar_month_outlined),
       ],
       onRefresh: () => _cubit.load(),
+      onProfile: _openProfile,
       onLogout: _logout,
       refreshing: state.loading,
       error: state.error,
@@ -204,14 +286,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               index: _index,
               children: [
                 AdminOverviewTab(
-                  loginResponse: widget.loginResponse,
+                  loginResponse: _currentLogin(state),
                   dashboardData: state.dashboard,
                   stores: state.stores,
                   users: state.users,
                   attendance: state.attendance,
                   dataReady: state.initialized,
                   onAddStore: () => _store(),
-                  onAddUser: _user,
+                  onOpenProfile: _openProfile,
                   onEditStore: (s) => _store(store: s),
                   onNavigate: (i) => setState(() => _index = i),
                   onRefresh: _cubit.load,
@@ -223,14 +305,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   onEditStore: (s) => _store(store: s),
                   onDeleteStore: _delete,
                   onCloseStore: (s) => _placement(store: s),
-                ),
-                AdminAccountsTab(
-                  users: state.users,
-                  stores: state.stores,
-                  onRefresh: _cubit.load,
-                  onAddUser: _user,
-                  onResetDevice: _reset,
-                  onPlacement: (u) => _placement(employee: u),
                 ),
                 AdminAttendanceTab(
                   attendanceList: state.attendance,

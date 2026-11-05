@@ -154,7 +154,6 @@ Widget wrap(
         : const [
             AppDestination('Tổng quan', Icons.dashboard_outlined),
             AppDestination('Chi nhánh', Icons.storefront_outlined),
-            AppDestination('Tài khoản', Icons.people_outline),
             AppDestination('Chấm công', Icons.fact_check_outlined),
           ],
     child: child,
@@ -176,7 +175,7 @@ AdminOverviewTab admin({VoidCallback? onAdd, ValueChanged<int>? onNavigate}) =>
       attendance: records,
       onRefresh: () async {},
       onAddStore: onAdd ?? () {},
-      onAddUser: () {},
+      onOpenProfile: () {},
       onNavigate: onNavigate ?? (_) {},
       onEditStore: (_) {},
     );
@@ -264,7 +263,7 @@ void main() {
     await tester.tap(find.text('Thêm chi nhánh'));
     expect(created, 1);
     await tester.tap(find.text('Xem chấm công'));
-    expect(selected, 3);
+    expect(selected, 2);
   });
   testWidgets(
     'manager assigns directly and publishes draft without repeat submissions',

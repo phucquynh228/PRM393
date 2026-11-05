@@ -281,7 +281,9 @@ class _HomeScreenState extends State<_EmployeeWorkspace> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: !enabled || (checkedIn && record == null)
+                onPressed:
+                    !enabled ||
+                        (checkedIn && (record == null || !record.canCheckOut))
                     ? null
                     : () {
                         context.read<HomeBloc>().add(
@@ -305,6 +307,8 @@ class _HomeScreenState extends State<_EmployeeWorkspace> {
                 label: Text(
                   active
                       ? 'Đang xử lý…'
+                      : checkedIn && record?.requiresCorrection == true
+                      ? 'Quá hạn check-out · Cần sửa công'
                       : checkedIn
                       ? 'Check-out · Kết thúc ca'
                       : 'Check-in · Bắt đầu ca',
@@ -317,6 +321,13 @@ class _HomeScreenState extends State<_EmployeeWorkspace> {
               child: Text(
                 'Chưa tìm thấy bản ghi vào ca. Vui lòng làm mới.',
                 style: TextStyle(color: AppColors.error),
+              ),
+            ),
+          if (checkedIn && record?.requiresCorrection == true)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text(
+                'Ca đã quá hạn 24 giờ từ lúc check-in. Vui lòng liên hệ quản lý để sửa công.',
               ),
             ),
           if (!pending && !checkedIn)
@@ -363,7 +374,11 @@ class _HomeScreenState extends State<_EmployeeWorkspace> {
                           record.shiftName,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        StatusBadge.fromStatus(record.status),
+                        StatusBadge.fromStatus(
+                          record.requiresCorrection
+                              ? 'NEEDS_CORRECTION'
+                              : record.status,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),

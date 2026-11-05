@@ -54,6 +54,7 @@ class StaffWorkflowIntegrationTest {
     @Autowired StaffNotificationRepository notifications;
     @Autowired PasswordEncoder passwords;
     @Autowired MockMvc mvc;
+    @Autowired com.cafehr.attendance.service.AttendanceService attendanceService;
     Store store;
     User staff, peer, manager;
     Shift shift;
@@ -133,6 +134,39 @@ class StaffWorkflowIntegrationTest {
                 .with(user("peer").roles("STAFF")).requestAttr("userId", peer.getId()))
                 .andExpect(status().isBadRequest());
         assertNull(item.getReadAt());
+    }
+
+    @Test void staleCheckInCannotCheckoutAndOnlyManagerApprovedCorrectionRestoresHours() {
+        LocalDate past = LocalDate.now().minusDays(12);
+        var stale = assign(staff, past); stale.setStatus(ScheduleStatus.CHECKED_IN);
+        var record = attendance.saveAndFlush(Attendance.builder().user(staff).schedule(stale).checkInTime(past.atTime(7, 0)).build());
+        // Another forgotten old checkout must not indefinitely block this correction.
+        var older = assign(staff, past.minusDays(5)); older.setStatus(ScheduleStatus.CHECKED_IN);
+        attendance.saveAndFlush(Attendance.builder().user(staff).schedule(older).checkInTime(past.minusDays(5).atTime(7, 0)).build());
+        assertThrows(com.cafehr.common.exception.BusinessException.class, () -> attendanceService.checkOut(staff.getId(), record.getId()));
+        assertNull(record.getCheckOutTime());
+        assertEquals(true, StaffViews.attendance(record).get("needsCorrection"));
+        var data = workspace.workspace(staff.getId(), LocalDate.now(), LocalDate.now().plusDays(6));
+        assertTrue(((List<?>) data.get("today")).isEmpty()); assertEquals(0L, data.get("weekWorkedMinutes"));
+        var correction = body(BranchRequestType.ATTENDANCE_CORRECTION, past);
+        correction.setSourceScheduleId(stale.getId()); correction.setRequestedCheckIn(past.atTime(7, 0)); correction.setRequestedCheckOut(past.atTime(12, 0));
+        Long requestId = id(service.create(staff.getId(), correction));
+        service.decide(store.getId(), requestId, BranchRequestStatus.APPROVED, "Đã xác minh giờ làm thực tế");
+        attendance.flush();
+        assertEquals(300L, StaffViews.attendance(record).get("workedMinutes"));
+        assertEquals(false, StaffViews.attendance(record).get("needsCorrection")); assertTrue(record.isManuallyAdjusted());
+    }
+
+    @Test void legacyMultiDayCheckoutIsExcludedButValidOvernightCheckoutStillWorks() {
+        var old = assign(staff, LocalDate.now().minusDays(12)); old.setStatus(ScheduleStatus.CHECKED_OUT);
+        var invalid = attendance.saveAndFlush(Attendance.builder().user(staff).schedule(old)
+                .checkInTime(LocalDateTime.now().minusDays(12)).checkOutTime(LocalDateTime.now()).build());
+        assertEquals(0L, StaffViews.attendance(invalid).get("workedMinutes"));
+        var night = assign(peer, LocalDate.now().minusDays(1)); night.setStatus(ScheduleStatus.CHECKED_IN);
+        var valid = attendance.saveAndFlush(Attendance.builder().user(peer).schedule(night)
+                .checkInTime(LocalDateTime.now().minusHours(8)).build());
+        var result = attendanceService.checkOut(peer.getId(), valid.getId());
+        assertNotNull(result.getCheckOutTime()); assertTrue(result.getWorkedMinutes() >= 480); assertFalse(result.isNeedsCorrection());
     }
 
     @Test void profileAndPasswordUpdatesRetainRoleAndBranch() {

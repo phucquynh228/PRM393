@@ -36,7 +36,14 @@ Staff đang chờ điều chuyển thấy thông báo trên trang chủ và vẫ
 - Yêu cầu đang chờ của chi nhánh và các yêu cầu đổi ca liên quan người được điều chuyển sẽ bị hủy, kèm ghi chú và thông báo.
 - Yêu cầu đã xử lý và chấm công lịch sử được giữ nguyên. Nghỉ đã được duyệt vẫn được kiểm tra theo nhân viên khi phân lịch mới.
 - Ca hủy không gây trùng lịch và không được cộng vào tổng giờ phân công hoặc thống kê vắng mặt.
-- Luồng điều chuyển qua `PUT /api/admin/users/{id}` và bổ nhiệm Manager cũng dùng quy tắc giữ lịch sử/hủy ca cũ.
+- Luồng điều chuyển qua `PUT /api/admin/users/{id}` dùng quy tắc giữ lịch sử/hủy ca cũ. Bổ nhiệm Manager trong form chi nhánh chỉ chọn người đang thuộc chi nhánh đó; muốn bổ nhiệm người ở nơi khác phải điều chuyển trước.
+
+## Bổ nhiệm Manager tại chi nhánh
+
+- Danh sách Người quản lý chỉ gồm Staff/Manager đang hoạt động và có `storeId` trùng chi nhánh đang chỉnh sửa. Admin, nhân viên chưa có chi nhánh, thuộc chi nhánh khác hoặc đã ngừng làm việc không nằm trong danh sách.
+- Backend kiểm tra lại nơi làm hiện tại khi bổ nhiệm và không tự điều chuyển nhân viên từ chi nhánh khác. Manager hiện tại vẫn được hiển thị nếu đủ điều kiện.
+- Chi nhánh mới tạo chưa có người trực thuộc: tạo chi nhánh trước, thêm/điều chuyển nhân viên vào đó, rồi mở chỉnh sửa để bổ nhiệm.
+- Đổi Manager trong cùng chi nhánh giữ nguyên phân công chi nhánh và lịch sử của nhân viên; Manager cũ chuyển thành Staff theo luồng hiện có.
 
 ## Giữ chi nhánh gốc
 

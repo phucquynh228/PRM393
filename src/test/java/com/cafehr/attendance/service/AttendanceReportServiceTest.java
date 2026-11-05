@@ -53,7 +53,7 @@ class AttendanceReportServiceTest {
         assertTrue(csv.contains("\"480\",\"Hoàn thành\""));
         assertTrue(csv.contains("\"'  =HYPERLINK(\"\"x\"\")\""));
         assertTrue(csv.contains("\"\",\"Vắng mặt\""));
-        assertTrue(csv.contains("\"\",\"Đang làm\""));
+        assertTrue(csv.contains("\"\",\"Cần sửa công\""));
     }
 
     @ParameterizedTest
@@ -73,6 +73,14 @@ class AttendanceReportServiceTest {
         assertEquals(0, empty.employeeCount()); assertTrue(empty.employees().isEmpty());
     }
 
+    @Test void reportsExcludeInvalidMultiDayDurationsAndFlagThemForCorrection() {
+        LocalDateTime in = LocalDateTime.of(2024, 2, 29, 7, 0);
+        when(schedules.findAttendanceReport(any(), any(), isNull(), isNull())).thenReturn(List.of(
+                row("Giờ công sai", ScheduleStatus.CHECKED_OUT, in, in.plusDays(12))));
+        assertEquals(0, reports.snapshot("month", "2024-02-29", null, null).summary().completedShifts());
+        String csv = new String(reports.export("month", "2024-02-29", null, null).bytes(), StandardCharsets.UTF_8);
+        assertTrue(csv.contains("\"\",\"Cần sửa công\"")); assertFalse(csv.contains("\"17280\""));
+    }
     @Test void summaryCountsPeopleOnceAndSeparatesLateAbsencesAndLeave() {
         LocalDateTime start = LocalDateTime.of(2024, 2, 29, 22, 0);
         when(schedules.findAttendanceReport(any(), any(), isNull(), isNull())).thenReturn(List.of(

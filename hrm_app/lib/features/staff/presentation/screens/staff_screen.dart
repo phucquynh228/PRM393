@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:hrm_app/features/schedule/presentation/widgets/fixed_roster_editor.dart';
+import 'package:hrm_app/shared/presentation/screens/employee_profile_section_screen.dart';
+import 'package:hrm_app/shared/presentation/widgets/employee_profile_menu.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:hrm_app/core/theme/app_theme.dart';
+import 'package:hrm_app/core/utils/attendance_timing.dart';
 import 'package:hrm_app/features/staff/data/repositories/staff_repository.dart';
 import 'package:hrm_app/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:hrm_app/features/staff/presentation/cubit/staff_cubit.dart';
@@ -17,6 +19,7 @@ import 'package:hrm_app/shared/presentation/widgets/stat_metric_card.dart';
 import 'package:hrm_app/shared/presentation/widgets/status_badge.dart';
 import 'package:hrm_app/features/branch/presentation/helpers/branch_helpers.dart';
 import 'package:hrm_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:hrm_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:hrm_app/features/staff/presentation/helpers/staff_helpers.dart';
 import 'package:hrm_app/features/staff/presentation/dialogs/staff_profile_form.dart';
 import 'package:hrm_app/features/staff/presentation/dialogs/staff_request_form.dart';
@@ -167,7 +170,11 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                 Text('Vào ca: ${stamp(record['checkInTime'])}'),
                 Text('Ra ca: ${stamp(record['checkOutTime'])}'),
                 Text(
-                  'Giờ thực tế: ${record['checkOutTime'] == null ? 'Đang tính, chưa ra ca' : minutesLabel(record['workedMinutes'])}',
+                  'Giờ thực tế: ${attendanceNeedsCorrection(record)
+                      ? 'Cần sửa công, chưa cộng giờ'
+                      : record['checkOutTime'] == null
+                      ? 'Đang tính, chưa ra ca'
+                      : minutesLabel(record['workedMinutes'])}',
                 ),
               ],
             ],
@@ -209,6 +216,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
         const AppDestination('Hồ sơ', Icons.person_outline),
       ],
       onDestinationSelected: _select,
+      onProfile: () => _select(5),
       onLogout: _logout,
       onRefresh: state.busy ? null : () => cubit.load(),
       refreshing: state.loading || state.busy,
@@ -232,8 +240,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                   request: () => _create(),
                   state: state,
                   refresh: () => cubit.load(),
-                  change: ({anchor, month}) =>
-                      cubit.load(anchor: anchor, month: month),
+                  change: ({anchor}) => cubit.load(anchor: anchor),
                   details: _details,
                   swap: (s) =>
                       _create(type: 'SHIFT_SWAP', scheduleId: s['id'] as int),
@@ -290,9 +297,13 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
         attendanceActions: true,
         busy: state.busy || state.loading,
         onCheckIn: () => cubit.checkIn(shift['id'] as int),
-        onCheckOut: record == null || record['checkOutTime'] != null
+        onCheckOut: record == null || !attendanceCanCheckOut(record)
             ? null
             : () => cubit.checkOut(record['id'] as int),
+        onCorrection: () => _create(
+          type: 'ATTENDANCE_CORRECTION',
+          scheduleId: shift['id'] as int,
+        ),
         onDetails: () => _details(shift),
         onSwap:
             shift['status'] == 'PENDING' &&
@@ -309,6 +320,21 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
       if (profile['employmentStatus'] == 'WAITING_TRANSFER') ...[
         const InlineNotice(
           'Bạn đang chờ điều chuyển chi nhánh. Bạn vẫn xem được lịch sử và thông báo; Admin sẽ bố trí nơi làm mới trước khi phân ca.',
+        ),
+        const SizedBox(height: 14),
+      ],
+      if (state
+          .items('attendance')
+          .any((record) => attendanceNeedsCorrection(record))) ...[
+        const InlineNotice(
+          'Có bản ghi quá hạn 24 giờ hoặc thời gian chưa hợp lệ. Các bản ghi này chưa được cộng giờ công; hãy gửi yêu cầu sửa công để quản lý xác nhận.',
+        ),
+        TextButton(
+          onPressed: () => setState(() {
+            _index = 1;
+            _attendanceFilter = 'REVIEW';
+          }),
+          child: const Text('Xem bản ghi cần sửa công'),
         ),
         const SizedBox(height: 14),
       ],
@@ -380,7 +406,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
             title: 'Giờ công tuần này',
             value: compactHours(state.data['weekWorkedMinutes']),
             icon: Icons.schedule,
-            subtitle: 'Chỉ cộng thời gian đã check-out',
+            subtitle: 'Chỉ cộng bản ghi hợp lệ, tối đa 24 giờ/ca',
             onTap: () => _select(1),
           ),
           StatMetricCard(
@@ -445,6 +471,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
         'LATE' => (r['lateMinutes'] as num? ?? 0) > 0,
         'EARLY' => (r['earlyLeaveMinutes'] as num? ?? 0) > 0,
         'OPEN' => r['checkOutTime'] == null,
+        'REVIEW' => attendanceNeedsCorrection(r),
         _ => true,
       };
     }).toList();
@@ -473,6 +500,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
             'LATE': 'Đi muộn',
             'EARLY': 'Về sớm',
             'OPEN': 'Chưa ra ca',
+            'REVIEW': 'Cần sửa công',
           }.entries)
             ChoiceChip(
               label: Text(entry.value),
@@ -514,7 +542,7 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
       ),
       const SizedBox(height: 16),
       Text(
-        '${items.length} bản ghi · ${minutesLabel(items.fold<num>(0, (sum, r) => sum + (r['workedMinutes'] as num? ?? 0)))} đã hoàn tất',
+        '${items.length} bản ghi · ${minutesLabel(items.where((r) => !attendanceNeedsCorrection(r)).fold<num>(0, (sum, r) => sum + (r['workedMinutes'] as num? ?? 0)))} đã hoàn tất',
         style: Theme.of(context).textTheme.titleMedium,
       ),
       const SizedBox(height: 16),
@@ -540,7 +568,11 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                       '${r['shiftName']}',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    StatusBadge.fromStatus('${r['status']}'),
+                    StatusBadge.fromStatus(
+                      attendanceNeedsCorrection(r)
+                          ? 'NEEDS_CORRECTION'
+                          : '${r['status']}',
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -554,7 +586,11 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Thực tế: ${r['checkOutTime'] == null ? 'Ca đang mở, chưa cộng giờ' : minutesLabel(r['workedMinutes'])}',
+                  'Thực tế: ${attendanceNeedsCorrection(r)
+                      ? 'Cần sửa công, chưa cộng giờ'
+                      : r['checkOutTime'] == null
+                      ? 'Ca đang mở, chưa cộng giờ'
+                      : minutesLabel(r['workedMinutes'])}',
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -673,89 +709,41 @@ class _StaffWorkspaceState extends State<_StaffWorkspace>
     ]);
   }
 
-  Widget _profile(StaffState state) {
-    final p = state.profile;
-    return _list([
-      const PageHeading(
-        title: 'Hồ sơ cá nhân',
-        subtitle: 'Thông tin nhân viên và bảo mật tài khoản',
-      ),
-      SurfaceCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const CircleAvatar(
-              radius: 32,
-              child: Icon(Icons.person_outline, size: 32),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '${p['name'] ?? '—'}',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            const StatusBadge(
-              label: 'Nhân viên',
-              variant: BadgeVariant.neutral,
-            ),
-            const SizedBox(height: 16),
-            for (final entry in {
-              'Mã nhân viên': p['employeeCode'],
-              'Số điện thoại đăng nhập': p['phone'],
-              'Chi nhánh': p['storeName'],
-              'Mã chi nhánh': p['storeCode'],
-              'Email': p['email'],
-              'Liên hệ khẩn cấp': p['emergencyContact'],
-              'Địa chỉ': p['address'],
-            }.entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.key,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 4),
-                    SelectableText(
-                      entry.value == null || '${entry.value}'.isEmpty
-                          ? 'Chưa cập nhật'
-                          : '${entry.value}',
-                    ),
-                  ],
+  void _openProfileSection(EmployeeProfileSection section) =>
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => BlocBuilder<StaffCubit, StaffState>(
+            bloc: cubit,
+            builder: (context, state) => EmployeeProfileSectionScreen(
+              section: section,
+              profile: state.profile,
+              onForgotPassword: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (_) => ForgotPasswordScreen(
+                    dio: cubit.repository.dio,
+                    initialPhone: '${state.profile['phone'] ?? ''}',
+                  ),
                 ),
               ),
-            FixedRosterSummary(entries: p['fixedRoster']),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.icon(
-                  onPressed: state.busy || state.loading
-                      ? null
-                      : () => _editProfile(),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Cập nhật thông tin'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: state.busy || state.loading
-                      ? null
-                      : () => _editProfile(password: true),
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('Đổi mật khẩu'),
-                ),
-                TextButton.icon(
-                  onPressed: _logout,
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Đăng xuất'),
-                ),
-              ],
+              onEdit: state.busy || state.loading || state.profile.isEmpty
+                  ? null
+                  : () => _editProfile(
+                      password: section == EmployeeProfileSection.security,
+                    ),
             ),
-          ],
+          ),
         ),
-      ),
-    ]);
-  }
+      );
+
+  Widget _profile(StaffState state) => _list([
+    const PageHeading(
+      title: 'Hồ sơ cá nhân',
+      subtitle: 'Thông tin nhân viên và bảo mật tài khoản',
+    ),
+    EmployeeProfileMenu(
+      profile: state.profile,
+      onSection: _openProfileSection,
+      onLogout: _logout,
+    ),
+  ]);
 }

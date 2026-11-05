@@ -192,13 +192,14 @@ public class BranchLifecycleService {
         if (candidate.getStore() != null) ids.add(candidate.getStore().getId());
         Store target = lockStores(ids).get(storeId);
         User user = lockUser(userId);
-        if (user.getRole() == Role.ADMIN || user.getEmploymentStatus() != EmploymentStatus.ACTIVE
-                || target.getStatus() != StoreStatus.ACTIVE) throw new BusinessException("Chỉ bổ nhiệm nhân viên và chi nhánh đang hoạt động");
+        if (user.getRole() == Role.ADMIN || user.getEmploymentStatus() != EmploymentStatus.ACTIVE)
+            throw new BusinessException("Chỉ bổ nhiệm nhân viên đang làm việc trong chi nhánh");
         if (user.getStore() == null || !storeId.equals(user.getStore().getId())) {
-            EmployeePlacement p = new EmployeePlacement(); p.setUserId(userId); p.setAction(EmployeePlacement.Action.TRANSFER); p.setTargetStoreId(storeId);
-            place(userId, p);
+            throw new BusinessException("Chỉ được bổ nhiệm Manager từ nhân viên thuộc chi nhánh này. Hãy điều chuyển nhân viên vào chi nhánh trước.");
         }
         User previous = target.getManager();
+        if (previous != null && previous.getId().equals(userId) && user.getRole() == Role.MANAGER) return;
+        if (target.getStatus() != StoreStatus.ACTIVE) throw new BusinessException("Chỉ bổ nhiệm Manager cho chi nhánh đang hoạt động");
         if (previous != null && !previous.getId().equals(userId)) {
             previous.setRole(Role.STAFF);
             notifications.send(previous, "Thay đổi quyền quản lý", "Bạn tiếp tục làm nhân viên tại " + target.getName(), "BRANCH");

@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -13,6 +13,7 @@ import 'package:hrm_app/features/admin/presentation/screens/admin_home_screen.da
 import 'package:hrm_app/features/branch/presentation/screens/branch_manager_screen.dart';
 import 'package:hrm_app/features/home/presentation/screens/home_screen.dart';
 import 'package:hrm_app/features/staff/presentation/screens/staff_screen.dart';
+import 'package:hrm_app/features/auth/presentation/screens/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -186,7 +187,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? 'Vui lòng nhập mật khẩu'
                                 : null,
                           ),
-                          const SizedBox(height: 24),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: busy
+                                  ? null
+                                  : () => Navigator.of(context).push<void>(
+                                      MaterialPageRoute(
+                                        builder: (_) => ForgotPasswordScreen(
+                                          dio: context.read<Dio>(),
+                                          initialPhone: _phone.text.trim(),
+                                        ),
+                                      ),
+                                    ),
+                              child: const Text('Quên mật khẩu?'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           FilledButton(
                             onPressed: busy ? null : _submit,
                             child: state is LoginLoading && !state.google
@@ -240,38 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: AppColors.textSecondary,
                             ),
                           ),
-                          if (kDebugMode) ...[
-                            const SizedBox(height: 24),
-                            ExpansionTile(
-                              tilePadding: EdgeInsets.zero,
-                              title: const Text(
-                                'Tài khoản dùng thử',
-                                style: TextStyle(fontSize: 13),
-                              ),
-                              children: [
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final demo in [
-                                      ('Nhân viên', '0901000003'),
-                                      ('Quản lý', '0901000002'),
-                                      ('Admin', '0901000001'),
-                                    ])
-                                      OutlinedButton(
-                                        onPressed: busy
-                                            ? null
-                                            : () {
-                                                _phone.text = demo.$2;
-                                                _password.text = '123456';
-                                              },
-                                        child: Text(demo.$1),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
                         ],
                       ),
                     ),

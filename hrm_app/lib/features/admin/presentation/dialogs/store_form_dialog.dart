@@ -55,6 +55,16 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
   int? _manager;
   bool _saving = false, _gps = false;
   String? _error;
+  List<Map> get _managerCandidates => widget.users
+      .whereType<Map>()
+      .where(
+        (user) =>
+            widget.store?['id'] != null &&
+            user['storeId']?.toString() == widget.store!['id'].toString() &&
+            (user['role'] == 'STAFF' || user['role'] == 'MANAGER') &&
+            (user['employmentStatus'] ?? 'ACTIVE') == 'ACTIVE',
+      )
+      .toList();
   @override
   void initState() {
     super.initState();
@@ -76,7 +86,10 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
     );
     _capacity = TextEditingController(text: s?['maxStaff']?.toString() ?? '15');
     _status = s?['status']?.toString() ?? 'ACTIVE';
-    _manager = s?['managerId'] as int?;
+    final managerId = int.tryParse('${s?['managerId']}');
+    _manager = _managerCandidates.any((user) => '${user['id']}' == '$managerId')
+        ? managerId
+        : null;
   }
 
   @override
@@ -219,30 +232,32 @@ class _StoreFormDialogState extends State<StoreFormDialog> {
           DropdownButtonFormField<int>(
             initialValue: _manager,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Người quản lý'),
+            decoration: InputDecoration(
+              labelText: 'Người quản lý',
+              helperText: widget.store?['id'] == null
+                  ? 'Tạo chi nhánh, thêm hoặc điều chuyển nhân viên vào đây rồi bổ nhiệm quản lý.'
+                  : 'Chỉ chọn nhân viên đang làm việc tại chi nhánh này.',
+              helperMaxLines: 3,
+            ),
             items: [
               const DropdownMenuItem<int>(
                 value: null,
                 child: Text('Chưa bổ nhiệm'),
               ),
-              ...widget.users
-                  .where(
-                    (u) =>
-                        u['role'] != 'ADMIN' &&
-                            (u['employmentStatus'] ?? 'ACTIVE') == 'ACTIVE' ||
-                        u['id'] == _manager,
-                  )
-                  .map(
-                    (u) => DropdownMenuItem<int>(
-                      value: u['id'],
-                      child: Text(
-                        u['name'] ?? '—',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+              ..._managerCandidates.map(
+                (u) => DropdownMenuItem<int>(
+                  value: u['id'],
+                  child: Text(
+                    u['name'] ?? '—',
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
+              ),
             ],
-            onChanged: _saving
+            onChanged:
+                _saving ||
+                    widget.store?['id'] == null ||
+                    _managerCandidates.isEmpty
                 ? null
                 : (value) => setState(() => _manager = value),
           ),
